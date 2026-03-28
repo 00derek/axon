@@ -278,3 +278,130 @@ func TestGenerate_WithOptions(t *testing.T) {
 		t.Errorf("expected max tokens 2048, got %v", capturedConfig.MaxOutputTokens)
 	}
 }
+
+// --- GenerateStream tests ---
+
+func TestGenerateStream_TextOnly(t *testing.T) {
+	fake := &fakeModelsClient{
+		generateStreamFn: func(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error] {
+			return makeTestIterator([]*genai.GenerateContentResponse{
+				{
+					Candidates: []*genai.Candidate{{
+						Content: &genai.Content{Parts: []*genai.Part{{Text: "Hello "}}},
+					}},
+				},
+				{
+					Candidates: []*genai.Candidate{{
+						Content:      &genai.Content{Parts: []*genai.Part{{Text: "world"}}},
+						FinishReason: genai.FinishReasonStop,
+					}},
+					UsageMetadata: &genai.GenerateContentResponseUsageMetadata{
+						PromptTokenCount:     genai.Ptr[int32](5),
+						CandidatesTokenCount: genai.Ptr[int32](3),
+						TotalTokenCount:      8,
+					},
+				},
+			}, nil)
+		},
+	}
+
+	llm := &GoogleLLM{model: "gemini-2.0-flash", mc: fake}
+	stream, err := llm.GenerateStream(context.Background(), kernel.GenerateParams{
+		Messages: []kernel.Message{kernel.UserMsg("Hi")},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Drain events
+	var texts []string
+	for txt := range stream.Text() {
+		texts = append(texts, txt)
+	}
+
+	if len(texts) != 2 {
+		t.Fatalf("expected 2 text chunks, got %d", len(texts))
+	}
+
+	resp := stream.Response()
+	if resp.Text != "Hello world" {
+		t.Errorf("expected 'Hello world', got %q", resp.Text)
+	}
+	if resp.Usage.TotalTokens != 8 {
+		t.Errorf("expected 8 total tokens, got %d", resp.Usage.TotalTokens)
+	}
+	if stream.Err() != nil {
+		t.Errorf("unexpected error: %v", stream.Err())
+	}
+}
+
+func TestGenerateStream_Error(t *testing.T) {
+	fake := &fakeModelsClient{
+		generateStreamFn: func(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error] {
+			return makeTestIterator(nil, fmt.Errorf("stream error"))
+		},
+	}
+
+	llm := &GoogleLLM{model: "gemini-2.0-flash", mc: fake}
+	stream, err := llm.GenerateStream(context.Background(), kernel.GenerateParams{
+		Messages: []kernel.Message{kernel.UserMsg("Hi")},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error from GenerateStream: %v", err)
+	}
+
+	// Drain
+	for range stream.Events() {
+	}
+
+	if stream.Err() == nil {
+		t.Fatal("expected stream error, got nil")
+	}
+}
+
+func TestGenerateStream_WithSystemAndTools(t *testing.T) {
+	var capturedConfig *genai.GenerateContentConfig
+
+	fake := &fakeModelsClient{
+		generateStreamFn: func(ctx context.Context, model string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error] {
+			capturedConfig = config
+			return makeTestIterator([]*genai.GenerateContentResponse{
+				{
+					Candidates: []*genai.Candidate{{
+						Content:      &genai.Content{Parts: []*genai.Part{{Text: "ok"}}},
+						FinishReason: genai.FinishReasonStop,
+					}},
+					UsageMetadata: &genai.GenerateContentResponseUsageMetadata{},
+				},
+			}, nil)
+		},
+	}
+
+	tool := &fakeKernelTool{
+		name: "lookup",
+		desc: "Look things up",
+		sch:  kernel.Schema{Type: "object"},
+	}
+
+	llm := &GoogleLLM{model: "gemini-2.0-flash", mc: fake}
+	stream, err := llm.GenerateStream(context.Background(), kernel.GenerateParams{
+		Messages: []kernel.Message{
+			kernel.SystemMsg("Be concise"),
+			kernel.UserMsg("test"),
+		},
+		Tools: []kernel.Tool{tool},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for range stream.Events() {
+	}
+
+	if capturedConfig.SystemInstruction == nil {
+		t.Error("expected system instruction in streaming config")
+	}
+	if len(capturedConfig.Tools) != 1 {
+		t.Errorf("expected 1 tool group, got %d", len(capturedConfig.Tools))
+	}
+}

@@ -94,6 +94,12 @@ func (c *AgentContext) ActiveTools() []Tool {
 	return active
 }
 
+// ReplaceTools replaces the entire tool set and resets the disabled set.
+func (c *AgentContext) ReplaceTools(tools []Tool) {
+	c.tools = tools
+	c.disabled = make(map[string]bool)
+}
+
 // AllTools returns all registered tools regardless of enabled state.
 func (c *AgentContext) AllTools() []Tool {
 	return c.tools

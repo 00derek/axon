@@ -113,6 +113,16 @@ func StopWhen(fn StopCondition) AgentOption {
 	return func(a *Agent) { a.stopConds = append(a.stopConds, fn) }
 }
 
+// CloneWith creates a copy of the agent with additional options applied.
+func (a *Agent) CloneWith(opts ...AgentOption) *Agent {
+	clone := *a
+	clone.tools = append([]Tool(nil), a.tools...)
+	for _, opt := range opts {
+		opt(&clone)
+	}
+	return &clone
+}
+
 // NewAgent creates a new Agent with the given options.
 func NewAgent(opts ...AgentOption) *Agent {
 	a := &Agent{maxRounds: defaultMaxRounds}

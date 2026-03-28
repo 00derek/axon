@@ -576,3 +576,115 @@ func TestBuildConfig_CachedContent(t *testing.T) {
 }
 
 func ptrStr(s string) *string { return &s }
+
+// --- Edge case tests ---
+
+func TestConvertSchema_NestedObject(t *testing.T) {
+	s := kernel.Schema{
+		Type: "object",
+		Properties: map[string]kernel.Schema{
+			"address": {
+				Type: "object",
+				Properties: map[string]kernel.Schema{
+					"street": {Type: "string"},
+					"city":   {Type: "string"},
+					"zip":    {Type: "string"},
+				},
+				Required: []string{"street", "city"},
+			},
+		},
+		Required: []string{"address"},
+	}
+	gs := convertSchema(s)
+	addr, ok := gs.Properties["address"]
+	if !ok {
+		t.Fatal("expected 'address' property")
+	}
+	if addr.Type != genai.TypeObject {
+		t.Errorf("expected TypeObject for address, got %v", addr.Type)
+	}
+	if len(addr.Properties) != 3 {
+		t.Errorf("expected 3 address properties, got %d", len(addr.Properties))
+	}
+	street, ok := addr.Properties["street"]
+	if !ok {
+		t.Fatal("expected 'street' sub-property")
+	}
+	if street.Type != genai.TypeString {
+		t.Errorf("expected TypeString for street, got %v", street.Type)
+	}
+}
+
+func TestConvertMessages_MixedParts(t *testing.T) {
+	msgs := []kernel.Message{
+		{Role: kernel.RoleUser, Content: []kernel.ContentPart{
+			{Text: strPtr("Describe this image:")},
+			{Image: &kernel.ImageContent{URL: "gs://bucket/photo.jpg", MimeType: "image/jpeg"}},
+		}},
+	}
+
+	contents, _ := convertMessages(msgs)
+	if len(contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(contents))
+	}
+	if len(contents[0].Parts) != 2 {
+		t.Fatalf("expected 2 parts, got %d", len(contents[0].Parts))
+	}
+	if contents[0].Parts[0].Text == "" {
+		t.Errorf("expected first part to have Text, got empty")
+	}
+	if contents[0].Parts[1].FileData == nil {
+		t.Errorf("expected second part to have FileData, got nil")
+	}
+}
+
+func TestConvertMessages_ToolResultNonJSON(t *testing.T) {
+	msgs := []kernel.Message{
+		{Role: kernel.RoleTool, Content: []kernel.ContentPart{
+			{ToolResult: &kernel.ToolResult{
+				ToolCallID: "call-1",
+				Name:       "read_file",
+				Content:    "plain text result, not JSON",
+			}},
+		}},
+	}
+
+	contents, _ := convertMessages(msgs)
+	if len(contents) != 1 {
+		t.Fatalf("expected 1 content, got %d", len(contents))
+	}
+	fr := contents[0].Parts[0].FunctionResponse
+	if fr == nil {
+		t.Fatal("expected FunctionResponse part")
+	}
+	// Non-JSON content should be wrapped in {"result": "..."} map
+	if fr.Response["result"] != "plain text result, not JSON" {
+		t.Errorf("expected wrapped result, got %v", fr.Response)
+	}
+}
+
+func TestBuildConfig_SafetySettings(t *testing.T) {
+	settings := []*genai.SafetySetting{
+		{Category: genai.HarmCategoryHateSpeech, Threshold: genai.HarmBlockThresholdBlockNone},
+	}
+	cfg := buildConfig(kernel.GenerateOptions{}, settings, nil)
+	if len(cfg.SafetySettings) != 1 {
+		t.Fatalf("expected 1 safety setting, got %d", len(cfg.SafetySettings))
+	}
+	if cfg.SafetySettings[0].Category != genai.HarmCategoryHateSpeech {
+		t.Errorf("expected HarmCategoryHateSpeech, got %v", cfg.SafetySettings[0].Category)
+	}
+}
+
+func TestBuildConfig_Empty(t *testing.T) {
+	cfg := buildConfig(kernel.GenerateOptions{}, nil, nil)
+	if cfg.Temperature != nil {
+		t.Errorf("expected nil temperature, got %v", cfg.Temperature)
+	}
+	if cfg.MaxOutputTokens != nil {
+		t.Errorf("expected nil max output tokens, got %v", cfg.MaxOutputTokens)
+	}
+	if cfg.ResponseMIMEType != "" {
+		t.Errorf("expected empty response MIME type, got %q", cfg.ResponseMIMEType)
+	}
+}

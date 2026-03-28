@@ -1,0 +1,13 @@
+go 1.25.2
+
+use (
+	./contrib/mongo
+	./contrib/plan
+	./examples
+	./interfaces
+	./kernel
+	./middleware
+	./providers/google
+	./testing
+	./workflow
+)

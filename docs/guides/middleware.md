@@ -34,6 +34,26 @@ wrapped := middleware.Wrap(
 // Call order: WithRetry → WithTimeout → WithLogging → llm
 ```
 
+```
+middleware.Wrap(llm, WithRetry, WithTimeout, WithLogging)
+
+  Agent calls Generate()
+       │
+       ▼
+  ┌─────────────┐
+  │  WithRetry   │  ← outermost: retries on failure
+  │  ┌─────────┐ │
+  │  │WithTimeout│ │  ← middle: adds deadline
+  │  │ ┌──────┐ │ │
+  │  │ │Logger│ │ │  ← innermost: logs the call
+  │  │ │ ┌──┐ │ │ │
+  │  │ │ │LLM│ │ │ │  ← actual LLM provider
+  │  │ │ └──┘ │ │ │
+  │  │ └──────┘ │ │
+  │  └─────────┘ │
+  └─────────────┘
+```
+
 The wrapped LLM satisfies `kernel.LLM` and is passed directly to
 `kernel.WithModel`. From the agent's perspective nothing has changed.
 
@@ -206,6 +226,21 @@ type Route struct {
 Routes are evaluated in order. The first condition that returns `true` wins.
 If no condition matches, the fallback is used.
 
+```
+NewRouter(fallback, route1, route2, route3)
+
+  Request ──► route1.Condition? ──yes──► route1.Model
+              │ no
+              ▼
+              route2.Condition? ──yes──► route2.Model
+              │ no
+              ▼
+              route3.Condition? ──yes──► route3.Model
+              │ no
+              ▼
+              fallback (default)
+```
+
 `RouteContext` exposes the request before it is sent to any model:
 
 ```go
@@ -314,6 +349,17 @@ func Cascade(
 ) kernel.LLM
 ```
 
+```
+Cascade(primary, fallback, shouldEscalate)
+
+  Request ──► primary.Generate()
+              │
+              ▼
+              shouldEscalate(response)?
+              ├─ false ──► return response  (cheap model was good enough)
+              └─ true  ──► fallback.Generate() ──► return response
+```
+
 This is useful for a "try cheap first, escalate on low quality" pattern:
 
 ```go
@@ -337,6 +383,22 @@ streams.
 Because every middleware and router satisfies `kernel.LLM`, they compose
 freely. You can apply middleware to individual models before routing, or apply
 middleware to the router itself.
+
+```
+  Agent
+    │
+    ▼
+  Cascade(cheap, expensive, qualityCheck)
+    │                    │
+    ▼                    ▼
+  cheap stack          expensive stack
+  ┌──────────┐         ┌──────────┐
+  │  Retry   │         │  Retry   │
+  │ Timeout  │         │ Timeout  │
+  │  Logger  │         │  Logger  │
+  │ Haiku LLM│         │ Opus LLM │
+  └──────────┘         └──────────┘
+```
 
 ### Middleware per model, then cascade
 

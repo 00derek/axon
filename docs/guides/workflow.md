@@ -71,6 +71,15 @@ the state that the previous step returned.
 func NewWorkflow(steps ...WorkflowStep) WorkflowStep
 ```
 
+```
+NewWorkflow(step1, step2, step3)
+
+  Input ──► step1 ──► step2 ──► step3 ──► Output
+            state     state     state
+            flows     flows     flows
+            through   through   through
+```
+
 ```go
 enhance := workflow.Step("enhance", func(_ context.Context, s *workflow.WorkflowState) (*workflow.WorkflowState, error) {
     base, _ := s.Data["greeting"].(string)
@@ -95,6 +104,16 @@ are merged back into a single state (see Section 4 for merge semantics).
 
 ```go
 func Parallel(steps ...WorkflowStep) WorkflowStep
+```
+
+```
+Parallel(stepA, stepB, stepC)
+
+                ┌─► stepA ──► Data: {user: "Alice"}     ─┐
+                │                                          │
+  Input ────────┼─► stepB ──► Data: {prefs: "dark"}      ─┼──► Merge (declaration order)
+                │                                          │     Data: {user, prefs, history}
+                └─► stepC ──► Data: {history: "3 convos"} ─┘
 ```
 
 ```go
@@ -133,6 +152,15 @@ func Router(
 ) WorkflowStep
 ```
 
+```
+Router(classify, routes)
+
+  Input ──► classify(ctx, state) ──► "technical" ──► routes["technical"]
+                                  ──► "general"  ──► routes["general"]
+                                  ──► "billing"  ──► routes["billing"]
+                                  ──► (unknown)  ──► error
+```
+
 ```go
 router := workflow.Router(
     func(_ context.Context, s *workflow.WorkflowState) string {
@@ -161,6 +189,17 @@ func RetryUntil(
     body  WorkflowStep,
     until func(context.Context, *WorkflowState) bool,
 ) WorkflowStep
+```
+
+```
+RetryUntil("name", body, until)
+
+  ┌──────────────────────────┐
+  │                          │
+  ▼                          │
+  until(ctx, state)?         │
+  ├─ true  ──► return state  │
+  └─ false ──► body.Run() ───┘
 ```
 
 ```go
@@ -199,6 +238,15 @@ func Conditional(
     ifTrue  WorkflowStep,
     ifFalse WorkflowStep,
 ) WorkflowStep
+```
+
+```
+Conditional(check, ifTrue, ifFalse)
+
+  check(ctx, state)?
+  ├─ true  ──► ifTrue.Run(state)  ──► output
+  └─ false ──► ifFalse.Run(state) ──► output
+                (or pass-through if nil)
 ```
 
 ```go
@@ -315,6 +363,15 @@ can be surprising if the intent was to accumulate rather than overwrite.
 
 Fetch all context concurrently before calling an agent, so the agent has
 everything it needs in one round:
+
+```
+  ┌─► loadHistory ──┐
+  │                  │
+  ├─► loadMemories ──┼──► classifyIntent ──► routeToAgent ──► saveHistory
+  │                  │
+  └─► checkGuard ───┘
+       (parallel)         (sequential)        (sequential)      (sequential)
+```
 
 ```go
 wf := workflow.NewWorkflow(

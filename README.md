@@ -88,6 +88,7 @@ See [`examples/`](examples/) for runnable code:
 | [05-workflow](examples/05-workflow/) | Parallel steps, routing, retry loops |
 | [06-testing](examples/06-testing/) | MockLLM, assertions, ScoreCard |
 | [07-restaurant-bot](examples/07-restaurant-bot/) | Full toy application tying all packages together |
+| [08-plan](examples/08-plan/) | Multi-step procedure tracking with contrib/plan |
 
 ## Documentation
 

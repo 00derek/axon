@@ -113,6 +113,32 @@ order.
 | `OnToolStart(func(*ToolContext))` | `*ToolContext` | Before tool execution |
 | `OnToolEnd(func(*ToolContext))` | `*ToolContext` | After tool execution |
 
+### Hook lifecycle timeline
+
+The diagram below shows the execution order across a two-round turn — the first round
+calls a tool, the second produces a plain-text response.
+
+```
+Turn Start
+│
+├─ OnStart(TurnContext)
+│
+├─ Round 0
+│  ├─ PrepareRound(RoundContext)
+│  ├─ LLM.Generate()
+│  ├─ OnToolStart(ToolContext)  ─┐
+│  ├─ Tool.Execute()             ├─ (for each tool call)
+│  ├─ OnToolEnd(ToolContext)    ─┘
+│  └─ OnRoundFinish(RoundContext)
+│
+├─ Round 1
+│  ├─ PrepareRound(RoundContext)
+│  ├─ LLM.Generate()
+│  └─ OnRoundFinish(RoundContext)  ← text response, no tools
+│
+└─ OnFinish(TurnContext)
+```
+
 ### Context fields
 
 **`TurnContext`** — available in `OnStart` and `OnFinish`:
@@ -144,6 +170,26 @@ type ToolContext struct {
     Result   any             // nil in OnToolStart; populated in OnToolEnd
     Error    error           // nil unless the tool returned an error
 }
+```
+
+### Context availability at a glance
+
+```
+TurnContext (OnStart/OnFinish)
+├─ AgentCtx  → modify tools, messages, system prompt
+├─ Input     → the user's input string
+└─ Result    → nil in OnStart, populated in OnFinish
+
+RoundContext (PrepareRound/OnRoundFinish)
+├─ AgentCtx     → modify tools, messages
+├─ RoundNumber  → which round (0-indexed)
+└─ LastResponse → nil on first round
+
+ToolContext (OnToolStart/OnToolEnd)
+├─ ToolName  → which tool
+├─ Params    → raw JSON params
+├─ Result    → nil in OnToolStart
+└─ Error     → nil in OnToolStart
 ```
 
 ### Example: all six hooks

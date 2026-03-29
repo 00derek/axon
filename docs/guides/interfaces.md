@@ -9,6 +9,29 @@ testing. Bring your own implementations for production.
 
 ---
 
+## Hook integration overview
+
+The diagram below shows how stores and guards plug into the agent lifecycle via
+`OnStart` and `OnFinish` hooks.
+
+```
+agent.Run(ctx, "user input")
+│
+├─ OnStart
+│  ├─ Guard.Check(input) ──► blocked? → disable tools, change prompt
+│  ├─ HistoryStore.LoadMessages(sessionID) ──► prepend to conversation
+│  └─ MemoryStore.Search(userID, input) ──► inject as system message
+│
+├─ Agent loop (rounds)
+│  └─ ... LLM generates, tools execute ...
+│
+└─ OnFinish
+   ├─ HistoryStore.SaveMessages(sessionID, newMessages)
+   └─ MemoryStore.Save(userID, extractedMemories)  ← async/optional
+```
+
+---
+
 ## 1. HistoryStore
 
 `HistoryStore` manages short-term conversation history scoped to a session.
@@ -25,6 +48,26 @@ type HistoryStore interface {
 - `LoadMessages` returns the last `limit` messages. Pass `limit <= 0` to
   retrieve all messages.
 - `Clear` removes the entire message history for a session.
+
+### Session model
+
+Each session accumulates turns. `LoadMessages` returns the most recent slice;
+`SaveMessages` appends the new turn.
+
+```
+Session "user-123-abc"
+┌──────────────────────────────────────────┐
+│  SaveMessages(session, [user, assistant])│
+│                                          │
+│  Turn 1: [UserMsg, AssistantMsg]         │
+│  Turn 2: [UserMsg, AssistantMsg]         │
+│  Turn 3: [UserMsg, AssistantMsg]         │
+│  ...                                     │
+│                                          │
+│  LoadMessages(session, limit=20)         │
+│  → returns last 20 messages              │
+└──────────────────────────────────────────┘
+```
 
 ### In-memory implementation
 
@@ -189,6 +232,20 @@ if err != nil {
 if !result.Allowed {
     fmt.Println("blocked:", result.Reason)
 }
+```
+
+### Check flow
+
+```
+Guard.Check(ctx, "user input")
+│
+├─ Allowed: true  ──► agent proceeds normally
+│                      (all tools available, normal prompt)
+│
+└─ Allowed: false ──► OnStart hook reacts:
+   Reason: "blocked"   ├─ AgentCtx.DisableTools()
+                        ├─ AgentCtx.SetSystemPrompt("I can't help with that.")
+                        └─ Agent responds with safety message
 ```
 
 ### Integration pattern: OnStart hook

@@ -7,6 +7,19 @@ Both drive the same agent loop; the difference is in how you receive the output.
 
 ## 1. Run vs Stream
 
+```
+agent.Run(ctx, input)              agent.Stream(ctx, input)
+│                                  │
+│  (blocks until complete)         │  returns immediately
+│                                  │
+▼                                  ▼
+*Result                            *StreamResult
+├─ .Text                           ├─ .Events() ──► chan StreamEvent
+├─ .Rounds                         ├─ .Text()   ──► chan string
+└─ .Usage                          ├─ .Result() ──► *Result (blocks)
+                                   └─ .Err()    ──► error
+```
+
 `agent.Run` blocks until the entire turn finishes and returns a `*Result`:
 
 ```go
@@ -45,6 +58,23 @@ call rather than a direct return.
 The `StreamResult.Events()` method returns a `<-chan StreamEvent` that emits every
 event in the order it occurs. Three concrete event types are defined in the `kernel`
 package:
+
+```
+agent.Stream(ctx, "input")
+│
+├─ Round 0 (tool call round)
+│  ├─► ToolStartEvent{ToolName: "search", Params: {...}}
+│  │   ... tool executes ...
+│  └─► ToolEndEvent{ToolName: "search", Result: [...]}
+│
+├─ Round 1 (text response round)
+│  ├─► TextDeltaEvent{Text: "I found "}
+│  ├─► TextDeltaEvent{Text: "3 restaurants"}
+│  └─► TextDeltaEvent{Text: " for you."}
+│
+└─ Events() channel closes
+   └─► Result() now returns the final *Result
+```
 
 ### `TextDeltaEvent`
 
@@ -112,6 +142,25 @@ A complete runnable version of this pattern is in `examples/03-streaming/main.go
 ---
 
 ## 3. Convenience: Text Channel
+
+```
+  Stream starts
+       │
+       ▼
+  Events() channel open ◄──── receives events as they happen
+  Text() channel open   ◄──── receives text deltas only
+       │
+       ▼
+  Agent loop completes
+       │
+       ▼
+  Events() channel closes
+  Text() channel closes
+       │
+       ▼
+  Result() returns *Result
+  Err() returns error (or nil)
+```
 
 If you only need the text output and have no interest in tool events, use
 `StreamResult.Text()`. It returns a `<-chan string` that receives only text deltas,

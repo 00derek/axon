@@ -4,6 +4,15 @@ Axon provides the `axontest` package (`github.com/axonframework/axon/testing`) w
 
 ## MockLLM
 
+```
+MockLLM scripted responses          Agent execution
+──────────────────────────          ─────────────────
+OnRound(0).RespondWithToolCall  ◄── Round 0: LLM.Generate() → tool call
+                                    Tool executes, result fed back
+OnRound(1).RespondWithText      ◄── Round 1: LLM.Generate() → text
+                                    Agent returns Result
+```
+
 `MockLLM` implements `kernel.LLM` with per-round scripted responses. Construct one with `NewMockLLM()`, then use `OnRound(n)` to define what the LLM returns on each call. Rounds are 0-indexed and correspond to sequential `Generate` calls during a single agent run.
 
 ```go
@@ -77,6 +86,16 @@ result := axontest.Run(t, agent, "hello",
 
 ## Tool Assertions
 
+```
+result.ExpectTool("search")          ← select tool by name
+      .WithParam("query", "pizza")   ← filter: must have this param
+      .WithParam("limit", 5)         ← filter: and this param
+      .Called(t)                      ← assert: was called (fails test if not)
+
+result.ExpectTool("book")
+      .NotCalled(t)                  ← assert: was never called
+```
+
 `result.ExpectTool(name)` begins a `*ToolAssertion` chain for a named tool. Assertions scan tool calls across all rounds.
 
 ```go
@@ -148,6 +167,30 @@ result.ExpectRounds(t, 3)
 ```
 
 ## ScoreCard (LLM-as-Judge)
+
+```
+ScoreCard{Criteria, PassingScore: 7}
+│
+├─ Criterion: "Recommends a restaurant by name"  (5 pts)
+├─ Criterion: "Asks about dietary restrictions"   (3 pts)
+├─ Criterion: "Response is polite"                (2 pts)
+│
+▼
+scoreCard.Evaluate(ctx, judge, messages)
+│
+├─ Judge LLM receives conversation + criteria
+│
+├─ For each criterion, judge returns:
+│  ├─ reasoning: "The assistant mentioned Pizza Palace..."
+│  └─ condition_met: true/false
+│
+▼
+ScoreResult
+├─ TotalScore: 8  (5 + 0 + 3 — second criterion failed)
+├─ MaxScore: 10
+├─ Passed: true   (8 >= 7 passing score)
+└─ Details: [{reasoning, condition_met}, ...]
+```
 
 `ScoreCard` evaluates a full conversation against a set of weighted criteria using a judge LLM. It is appropriate for measuring response quality when simple string matching is insufficient.
 

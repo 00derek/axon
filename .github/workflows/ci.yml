@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module:
+          - kernel
+          - workflow
+          - interfaces
+          - middleware
+          - testing
+          - contrib/plan
+          - contrib/mongo
+          - providers/google
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Run tests
+        working-directory: ${{ matrix.module }}
+        run: go test -race -count=1 -v ./...
+
+      - name: Run vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...

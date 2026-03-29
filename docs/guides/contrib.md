@@ -76,6 +76,27 @@ sets `Notes` to an empty map.
 | `NeedsUserInput` | `bool` | Hints to the LLM that it should wait for the user before advancing |
 | `CanRepeat` | `bool` | Hints to the LLM that this step may be revisited |
 
+#### Step status transitions
+
+```
+                 ┌──────────┐
+                 │ pending  │
+                 └────┬─────┘
+                      │ (auto-activate when previous step completes)
+                      ▼
+                 ┌──────────┐
+          ┌──────│  active  │──────┐
+          │      └──────────┘      │
+          ▼                        ▼
+    ┌──────────┐            ┌──────────┐
+    │   done   │            │ skipped  │
+    └──────────┘            └──────────┘
+          │                        │
+          └───────┬────────────────┘
+                  ▼
+        next pending step auto-activates
+```
+
 ---
 
 ### Attaching a plan to an agent
@@ -117,6 +138,33 @@ agent := kernel.NewAgent(append(baseOpts, plan.Attach(p)...)...)
 The LLM reads the plan in every system prompt and uses it to decide which
 action to take next. The active step (`[>]` marker) tells the model what it
 should be doing right now.
+
+```
+plan.Attach(p) returns 3 AgentOptions:
+
+  ┌─ OnStart hook ──────────── activates first pending step
+  │
+  ├─ PrepareRound hook ─────── injects plan text into system prompt
+  │                             (updated each round to reflect changes)
+  │
+  └─ WithTools ─────────────── registers mark_step + add_note tools
+
+Agent loop with plan:
+
+  OnStart: activate step 1
+  │
+  ├─ Round 0
+  │  ├─ PrepareRound: inject plan into system prompt
+  │  ├─ LLM reads plan, calls mark_step("gather", "done")
+  │  └─ mark_step auto-activates step 2
+  │
+  ├─ Round 1
+  │  ├─ PrepareRound: inject updated plan (step 1 ✓, step 2 active)
+  │  ├─ LLM reads plan, does work, calls mark_step("search", "done")
+  │  └─ mark_step auto-activates step 3
+  │
+  └─ ... continues until all steps done
+```
 
 ---
 
@@ -187,6 +235,14 @@ Notes:
 ```
 
 Status markers: `[✓]` done, `[>]` active, `[ ]` pending, `[-]` skipped.
+
+```
+[✓] gather  — Ask preferences           ← done
+[✓] search  — Find flights              ← done
+[>] present — Show options to user       ← active (current)
+[ ] confirm — Book the selected flight   ← pending
+[-] extras  — Add hotel/car              ← skipped
+```
 
 ---
 

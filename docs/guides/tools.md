@@ -85,6 +85,27 @@ schema := kernel.SchemaFrom[SearchParams]()
 | `minimum:"n"` | `minimum` | Numeric lower bound (integers and floats) |
 | `maximum:"n"` | `maximum` | Numeric upper bound (integers and floats) |
 
+```
+Go struct                          JSON Schema
+─────────────────                  ─────────────────
+type SearchParams struct {    ──►  {
+  Query string                       "type": "object",
+    `json:"query"             ──►    "properties": {
+     description:"search text" ──►     "query": {
+     required:"true"`                    "type": "string",
+                                         "description": "search text"
+  Limit int                            },
+    `json:"limit,omitempty"   ──►      "limit": {
+     description:"max results" ──►       "type": "integer",
+     required:"false"                    "description": "max results",
+     minimum:"1"              ──►        "minimum": 1,
+     maximum:"50"`            ──►        "maximum": 50
+}                                      }
+                                     },
+                              ──►    "required": ["query"]
+                                   }
+```
+
 ### Required vs optional fields
 
 Every exported struct field is required unless you add `required:"false"`:
@@ -248,6 +269,23 @@ execution. For a `Guided[T]` result it produces:
 For a plain result it produces only the JSON. You do not call `SerializeToolResult`
 directly in normal usage; it runs automatically as part of the tool execution model.
 
+```
+Tool returns Guided[[]Restaurant]
+│
+├─ Data: [{name: "Pizza Palace", rating: 4.5}, ...]
+│
+├─ Guidance: "Found 3 restaurants. Ask user to pick one."
+│
+└─ SerializeToolResult combines them:
+   ┌────────────────────────────────────────────┐
+   │ [{"name":"Pizza Palace","rating":4.5},...] │ ← data (JSON)
+   │                                            │
+   │ ---                                        │
+   │ Found 3 restaurants. Ask user to pick one. │ ← guidance
+   └────────────────────────────────────────────┘
+   This full text becomes ToolResult.Content — what the LLM reads.
+```
+
 ---
 
 ## 4. Tool Execution Model
@@ -279,6 +317,25 @@ myTool := kernel.NewTool[MyParams, MyResult](
         return callExternalService(ctx, p.Query)
     },
 )
+```
+
+```
+Agent Round (tool call)
+│
+├─ LLM returns ToolCall{Name: "search", Params: {"query": "pizza"}}
+│
+├─ Agent finds tool "search" by name
+│
+├─ NewTool deserializes JSON params into SearchParams struct
+│
+├─ fn(ctx, SearchParams{Query: "pizza"}) executes
+│  └─ returns ([]Restaurant, nil)
+│
+├─ SerializeToolResult([]Restaurant) → JSON string
+│
+├─ Appended to messages as ToolResult{Content: "[{...}]"}
+│
+└─ Next round: LLM sees the tool result and responds
 ```
 
 ---

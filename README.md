@@ -103,3 +103,7 @@ See [`examples/`](examples/) for runnable code:
 - **Contrib Guides:**
   - [Plan](docs/contrib/plan.md) — multi-step procedure tracking
   - [MongoDB](docs/contrib/mongo.md) — persistent history and memory storage
+
+## License
+
+[Apache License 2.0](LICENSE)

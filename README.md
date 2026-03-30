@@ -93,13 +93,13 @@ See [`examples/`](examples/) for runnable code:
 ## Documentation
 
 - [Getting Started](docs/getting-started.md) — installation and first agent
-- [Agents Guide](docs/guides/agents.md) — lifecycle, hooks, stop conditions
-- [Tools Guide](docs/guides/tools.md) — typed tools, schemas, guided responses
-- [Streaming Guide](docs/guides/streaming.md) — Stream vs Run, events
-- [Middleware Guide](docs/guides/middleware.md) — retry, logging, routing, cascade
-- [Workflow Guide](docs/guides/workflow.md) — orchestration patterns
-- [Testing Guide](docs/guides/testing.md) — mocking, assertions, evaluation
-- [Interfaces Guide](docs/guides/interfaces.md) — persistence and guards
+- [Agents Guide](docs/agents.md) — lifecycle, hooks, stop conditions
+- [Tools Guide](docs/tools.md) — typed tools, schemas, guided responses
+- [Streaming Guide](docs/streaming.md) — Stream vs Run, events
+- [Middleware Guide](docs/middleware.md) — retry, logging, routing, cascade
+- [Workflow Guide](docs/workflow.md) — orchestration patterns
+- [Testing Guide](docs/testing.md) — mocking, assertions, evaluation
+- [Interfaces Guide](docs/interfaces.md) — persistence and guards
 - **Contrib Guides:**
-  - [Plan](docs/guides/contrib/plan.md) — multi-step procedure tracking
-  - [MongoDB](docs/guides/contrib/mongo.md) — persistent history and memory storage
+  - [Plan](docs/contrib/plan.md) — multi-step procedure tracking
+  - [MongoDB](docs/contrib/mongo.md) — persistent history and memory storage

@@ -129,10 +129,10 @@ agent := kernel.NewAgent(
 
 ## Next Steps
 
-- [Tools Guide](guides/tools.md) — schema tags, nested structs, Guided responses
-- [Agents Guide](guides/agents.md) — hooks, stop conditions, AgentContext
-- [Streaming Guide](guides/streaming.md) — real-time event streaming
-- [Middleware Guide](guides/middleware.md) — retry, logging, cost tracking, model routing
-- [Workflow Guide](guides/workflow.md) — orchestrate multi-agent pipelines
-- [Testing Guide](guides/testing.md) — mock, assert, evaluate agent behavior
+- [Tools Guide](tools.md) — schema tags, nested structs, Guided responses
+- [Agents Guide](agents.md) — hooks, stop conditions, AgentContext
+- [Streaming Guide](streaming.md) — real-time event streaming
+- [Middleware Guide](middleware.md) — retry, logging, cost tracking, model routing
+- [Workflow Guide](workflow.md) — orchestrate multi-agent pipelines
+- [Testing Guide](testing.md) — mock, assert, evaluate agent behavior
 - [Examples](../examples/) — runnable code for every feature

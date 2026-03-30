@@ -6,7 +6,7 @@ where it is, and it gets `mark_step` / `add_note` tools to record progress.
 
 **Import:** `github.com/axonframework/axon/contrib/plan`
 
-**See also:** [examples/08-plan/](../../../examples/08-plan/) for a runnable demo.
+**See also:** [examples/08-plan/](../../examples/08-plan/) for a runnable demo.
 
 ---
 
@@ -240,6 +240,6 @@ Status markers:
 
 ## Full example
 
-See [`examples/08-plan/main.go`](../../../examples/08-plan/main.go) for a
+See [`examples/08-plan/main.go`](../../examples/08-plan/main.go) for a
 complete runnable example that walks through a 4-step trip booking procedure
 with `mark_step`, `add_note`, and `plan.Format` output at each stage.

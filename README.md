@@ -100,4 +100,6 @@ See [`examples/`](examples/) for runnable code:
 - [Workflow Guide](docs/guides/workflow.md) — orchestration patterns
 - [Testing Guide](docs/guides/testing.md) — mocking, assertions, evaluation
 - [Interfaces Guide](docs/guides/interfaces.md) — persistence and guards
-- [Contrib Guide](docs/guides/contrib.md) — plan tracking and MongoDB storage
+- **Contrib Guides:**
+  - [Plan](docs/guides/contrib/plan.md) — multi-step procedure tracking
+  - [MongoDB](docs/guides/contrib/mongo.md) — persistent history and memory storage

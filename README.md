@@ -53,7 +53,9 @@ func main() {
 | **plan**             | `github.com/axonframework/axon/plan`             | Agent-authored multi-step procedures with auditable progress tracking.    |
 | **testing**          | `github.com/axonframework/axon/testing`          | MockLLM, assertion helpers, ScoreCard evaluation, batch testing.          |
 | **interfaces**       | `github.com/axonframework/axon/interfaces`       | HistoryStore, MemoryStore, Guard contracts + in-memory implementations.   |
+| **providers/anthropic** | `github.com/axonframework/axon/providers/anthropic` | Anthropic Claude LLM adapter.                                          |
 | **providers/google** | `github.com/axonframework/axon/providers/google` | Google Gemini LLM adapter.                                                |
+| **providers/openai** | `github.com/axonframework/axon/providers/openai` | OpenAI Chat Completions LLM adapter.                                      |
 | **contrib/mongo**    | `github.com/axonframework/axon/contrib/mongo`    | MongoDB-backed HistoryStore and MemoryStore.                              |
 
 Each package is a separate Go module. Import only what you need — `kernel/` has zero external dependencies.
@@ -89,6 +91,8 @@ See [`examples/`](examples/) for runnable code:
 | [06-testing](examples/06-testing/)               | MockLLM, assertions, ScoreCard                   |
 | [07-restaurant-bot](examples/07-restaurant-bot/) | Full toy application tying all packages together |
 | [08-plan](examples/08-plan/)                     | Agent self-planning with the `plan` package      |
+| [09-anthropic](examples/09-anthropic/)           | Minimal agent against the Anthropic Claude API   |
+| [10-openai](examples/10-openai/)                 | Minimal agent against the OpenAI Chat Completions API |
 
 ## Documentation
 

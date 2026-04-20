@@ -57,6 +57,16 @@ middleware.Wrap(llm, WithRetry, WithTimeout, WithLogging)
 The wrapped LLM satisfies `kernel.LLM` and is passed directly to
 `kernel.WithModel`. From the agent's perspective nothing has changed.
 
+> **Note on snippets below.** Provider examples assume an SDK client already
+> exists, e.g.
+>
+> ```go
+> import sdk "github.com/anthropics/anthropic-sdk-go"
+> client := sdk.NewClient() // reads ANTHROPIC_API_KEY
+> ```
+>
+> and then `anthropic.New(&client, ...)` wraps it into a `kernel.LLM`.
+
 See `examples/04-middleware/` for a complete runnable example.
 
 ---
@@ -82,7 +92,7 @@ retried because stream failures are not idempotent.
 
 ```go
 llm := middleware.Wrap(
-    anthropic.New("claude-3-5-haiku-20241022"),
+    anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
     middleware.WithRetry(3, 500*time.Millisecond),
 )
 ```
@@ -98,7 +108,7 @@ func WithTimeout(d time.Duration) Middleware
 
 ```go
 llm := middleware.Wrap(
-    anthropic.New("claude-3-5-haiku-20241022"),
+    anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
     middleware.WithTimeout(10*time.Second),
 )
 ```
@@ -121,7 +131,7 @@ func WithLogging(logger *slog.Logger) Middleware
 logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 llm := middleware.Wrap(
-    anthropic.New("claude-3-5-haiku-20241022"),
+    anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
     middleware.WithLogging(logger),
 )
 ```
@@ -157,7 +167,7 @@ tracker.CostFunc = func(in, out int) float64 {
 }
 
 llm := middleware.Wrap(
-    anthropic.New("claude-3-5-haiku-20241022"),
+    anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
     middleware.WithCostTracker(tracker),
 )
 
@@ -197,7 +207,7 @@ func (p *promCollector) RecordLLMCall(model string, usage kernel.Usage, err erro
 }
 
 llm := middleware.Wrap(
-    anthropic.New("claude-3-5-haiku-20241022"),
+    anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
     middleware.WithMetrics(&promCollector{}),
 )
 ```
@@ -253,8 +263,8 @@ type RouteContext struct {
 ### Example: route by content keyword
 
 ```go
-cheap := anthropic.New("claude-3-5-haiku-20241022")
-capable := anthropic.New("claude-opus-4-5")
+cheap := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
+capable := anthropic.New(&client, sdk.ModelClaudeOpus4_5)
 
 router := middleware.NewRouter(cheap,
     middleware.Route{
@@ -293,8 +303,8 @@ func RouteByTokenCount(threshold int, small kernel.LLM, large kernel.LLM) kernel
 ```
 
 ```go
-haiku := anthropic.New("claude-3-5-haiku-20241022")
-opus  := anthropic.New("claude-opus-4-5")
+haiku := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
+opus  := anthropic.New(&client, sdk.ModelClaudeOpus4_5)
 
 // Requests with > 2000 estimated tokens go to opus.
 router := middleware.RouteByTokenCount(2000, haiku, opus)
@@ -324,9 +334,9 @@ func RoundRobin(models ...kernel.LLM) kernel.LLM
 ```
 
 ```go
-replica1 := anthropic.New("claude-3-5-haiku-20241022")
-replica2 := anthropic.New("claude-3-5-haiku-20241022")
-replica3 := anthropic.New("claude-3-5-haiku-20241022")
+replica1 := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
+replica2 := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
+replica3 := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
 
 lb := middleware.RoundRobin(replica1, replica2, replica3)
 ```
@@ -363,8 +373,8 @@ Cascade(primary, fallback, shouldEscalate)
 This is useful for a "try cheap first, escalate on low quality" pattern:
 
 ```go
-haiku := anthropic.New("claude-3-5-haiku-20241022")
-opus  := anthropic.New("claude-opus-4-5")
+haiku := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
+opus  := anthropic.New(&client, sdk.ModelClaudeOpus4_5)
 
 // Escalate if the response is very short, which may indicate the cheap model
 // didn't have enough context to give a complete answer.
@@ -404,13 +414,13 @@ middleware to the router itself.
 
 ```go
 cheap := middleware.Wrap(
-    anthropic.New("claude-3-5-haiku-20241022"),
+    anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
     middleware.WithRetry(3, 100*time.Millisecond),
     middleware.WithTimeout(5*time.Second),
 )
 
 expensive := middleware.Wrap(
-    anthropic.New("claude-opus-4-5"),
+    anthropic.New(&client, sdk.ModelClaudeOpus4_5),
     middleware.WithTimeout(30*time.Second),
 )
 
@@ -451,22 +461,26 @@ import (
     "os"
     "time"
 
+    sdk "github.com/anthropics/anthropic-sdk-go"
+
     "github.com/axonframework/axon/kernel"
     "github.com/axonframework/axon/middleware"
     "github.com/axonframework/axon/providers/anthropic"
 )
 
 func buildLLM() kernel.LLM {
+    client := sdk.NewClient() // reads ANTHROPIC_API_KEY
+
     // Cheap model: up to 3 retries, 5 s ceiling per attempt.
     cheap := middleware.Wrap(
-        anthropic.New("claude-3-5-haiku-20241022"),
+        anthropic.New(&client, sdk.ModelClaudeHaiku4_5),
         middleware.WithRetry(3, 200*time.Millisecond),
         middleware.WithTimeout(5*time.Second),
     )
 
     // Capable model: no retries, but a generous timeout.
     capable := middleware.Wrap(
-        anthropic.New("claude-opus-4-5"),
+        anthropic.New(&client, sdk.ModelClaudeOpus4_5),
         middleware.WithTimeout(60*time.Second),
     )
 

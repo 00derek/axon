@@ -317,8 +317,8 @@ Multiple `StopWhen` options are OR-combined: the loop stops if any one of them r
 ## 5. AgentContext
 
 `AgentContext` is the live conversation state passed through every hook. It holds the
-message history and the tool registry for the current turn. You can read and mutate it
-from any hook.
+message history, the tool registry, and a capability-provided state bag for the
+current turn. You can read and mutate it from any hook.
 
 ### Methods
 
@@ -341,6 +341,36 @@ agentCtx.ReplaceTools(tools []Tool)     // replace the entire tool set
 
 `ActiveTools()` is what the agent passes to the LLM on each round. `EnableTools` and
 `DisableTools` let you narrow that set dynamically without deregistering tools.
+
+### State — capability-provided storage
+
+`AgentContext.State` is a `map[string]any` where capabilities (such as the
+`plan` package) stash typed values that travel with the conversation. Any hook
+or tool can read and write it.
+
+```go
+type AgentContext struct {
+    Messages []Message
+    State    map[string]any
+    // ... (tools, disabled)
+}
+```
+
+Keys should be package-qualified to avoid collisions. For example, the `plan`
+package uses `plan.StateKey` (`"plan"`):
+
+```go
+kernel.OnFinish(func(tc *kernel.TurnContext) {
+    if v, ok := tc.AgentCtx.State["plan"]; ok {
+        if p, ok := v.(*plan.Plan); ok {
+            persist(p)
+        }
+    }
+})
+```
+
+State makes cross-capability coordination and persistence straightforward
+without forcing every capability to manage its own closure.
 
 ### Dynamic tool scoping with PrepareRound
 
@@ -416,7 +446,37 @@ debugAgent := base.CloneWith(
 
 ---
 
-## 7. Result
+## 7. Capabilities
+
+A **capability** is an optional extension that bundles tools, hooks, and state
+to give an agent a specific ability — beyond what raw tool registration
+provides. Capabilities are opt-in: most agents don't need them.
+
+Capabilities follow a consistent pattern:
+
+```go
+opts := capability.Enable(config)          // returns []kernel.AgentOption
+agent := kernel.NewAgent(append(opts,
+    kernel.WithModel(llm),
+    // ... other options
+)...)
+```
+
+`Enable` returns a slice of `AgentOption` that wires in:
+
+- any tools the capability provides
+- hooks that manage its lifecycle
+- optional state stashed into `AgentContext.State`
+
+### Available capabilities
+
+| Capability | Import | What it adds |
+|---|---|---|
+| Planning | `github.com/axonframework/axon/plan` | Structured multi-step procedures with four tools (`create_plan`, `append_step`, `mark_step`, `add_note`) and plan text injected into the system prompt every round. See the [Plan Guide](plan.md). |
+
+---
+
+## 8. Result
 
 `agent.Run` returns `(*Result, error)`.
 

@@ -183,5 +183,32 @@ func TestAgentContextGetTool(t *testing.T) {
 	}
 }
 
+func TestAgentContextStateRoundTrip(t *testing.T) {
+	ac := NewAgentContext(nil)
+
+	// Empty by default but writable.
+	if ac.State == nil {
+		t.Fatal("expected State map to be initialized by NewAgentContext")
+	}
+
+	ac.State["plan"] = "value"
+	got, ok := ac.State["plan"]
+	if !ok {
+		t.Fatal("expected key 'plan' to be set")
+	}
+	if got != "value" {
+		t.Errorf("expected %q, got %v", "value", got)
+	}
+}
+
+func TestAgentContextStateNilSafeRead(t *testing.T) {
+	// Reading a nil map returns the zero value without panicking.
+	// This guards callers who receive an AgentContext built outside NewAgentContext.
+	var ac AgentContext
+	if v, ok := ac.State["missing"]; ok || v != nil {
+		t.Errorf("expected zero value from nil map, got (%v, %v)", v, ok)
+	}
+}
+
 // Ensure unused import doesn't break
 var _ = json.Marshal

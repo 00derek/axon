@@ -1,4 +1,3 @@
-// contrib/plan/format.go
 package plan
 
 import (
@@ -21,8 +20,17 @@ import (
 //
 //	Notes:
 //	- key: value
+//
+// For an empty plan, Format renders a placeholder line directing the LLM
+// to call create_plan.
 func Format(p *Plan) string {
 	var b strings.Builder
+
+	if len(p.Steps) == 0 && p.Name == "" && p.Goal == "" {
+		b.WriteString("## Current Plan: (not yet created)\n")
+		b.WriteString("No plan has been drafted. Call create_plan to propose the steps you will take to achieve the user's goal.\n")
+		return b.String()
+	}
 
 	fmt.Fprintf(&b, "## Current Plan: %s\n", p.Name)
 	fmt.Fprintf(&b, "Goal: %s\n", p.Goal)

@@ -294,6 +294,37 @@ summarizeStep := workflow.Step("summarize", func(ctx context.Context, s *workflo
 })
 ```
 
+### Plan-capable agents as nodes
+
+An agent with the `plan` capability enabled is a workflow node like any
+other — no special adapter needed. The workflow advances when the agent's
+`Run` returns, which happens when the agent's plan completes (or the model
+terminates early). Plans live **inside** an agent node; the workflow
+orchestrates nodes, not individual steps.
+
+```go
+import "github.com/axonframework/axon/plan"
+
+tripStep := workflow.Step("trip", func(ctx context.Context, s *workflow.WorkflowState) (*workflow.WorkflowState, error) {
+    p := plan.Empty() // agent will draft its own procedure
+    agent := kernel.NewAgent(append(
+        plan.Enable(p),
+        kernel.WithModel(llm),
+        kernel.WithSystemPrompt("You are a travel planner."),
+    )...)
+
+    result, err := agent.Run(ctx, s.Input)
+    if err != nil {
+        return nil, err
+    }
+    s.Data["trip_plan"] = p           // downstream steps can inspect p.Steps / p.Notes
+    s.Data["trip_text"] = result.Text
+    return s, nil
+})
+
+wf := workflow.NewWorkflow(classifyStep, tripStep, notifyStep)
+```
+
 For multi-agent pipelines the output of one agent step becomes the input of the
 next by writing to and reading from `Data`:
 

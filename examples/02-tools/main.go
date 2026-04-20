@@ -22,8 +22,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/axonframework/axon/axontest"
 	"github.com/axonframework/axon/kernel"
-	axontest "github.com/axonframework/axon/testing"
 )
 
 // AddParams holds parameters for the "add" tool.

@@ -51,7 +51,7 @@ func main() {
 | **middleware**       | `github.com/axonframework/axon/middleware`       | LLM wrappers: retry, logging, timeout, cost tracking, routing, cascade.   |
 | **workflow**         | `github.com/axonframework/axon/workflow`         | Compose agents and functions: sequential, parallel, routing, retry loops. |
 | **plan**             | `github.com/axonframework/axon/plan`             | Agent-authored multi-step procedures with auditable progress tracking.    |
-| **testing**          | `github.com/axonframework/axon/testing`          | MockLLM, assertion helpers, ScoreCard evaluation, batch testing.          |
+| **axontest**         | `github.com/axonframework/axon/axontest`         | MockLLM, assertion helpers, ScoreCard evaluation, batch testing.          |
 | **interfaces**       | `github.com/axonframework/axon/interfaces`       | HistoryStore, MemoryStore, Guard contracts + in-memory implementations.   |
 | **providers/anthropic** | `github.com/axonframework/axon/providers/anthropic` | Anthropic Claude LLM adapter.                                          |
 | **providers/google** | `github.com/axonframework/axon/providers/google` | Google Gemini LLM adapter.                                                |

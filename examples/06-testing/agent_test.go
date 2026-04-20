@@ -20,8 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/axonframework/axon/axontest"
 	"github.com/axonframework/axon/kernel"
-	axontest "github.com/axonframework/axon/testing"
 )
 
 // --- Parameter structs ---

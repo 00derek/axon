@@ -1,4 +1,4 @@
-module github.com/axonframework/axon/testing
+module github.com/axonframework/axon/axontest
 
 go 1.25.2
 

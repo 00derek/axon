@@ -272,13 +272,16 @@ Store whatever you need from the result in `Data`.
 import (
     "context"
 
+    sdk "github.com/anthropics/anthropic-sdk-go"
+
     "github.com/axonframework/axon/kernel"
     "github.com/axonframework/axon/providers/anthropic"
     "github.com/axonframework/axon/workflow"
 )
 
 // Create the agent once, outside the step.
-llm := anthropic.New("claude-3-5-haiku-20241022")
+client := sdk.NewClient() // reads ANTHROPIC_API_KEY
+llm := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
 summarizer := kernel.NewAgent(
     kernel.WithModel(llm),
     kernel.WithSystemPrompt("Summarize the following text concisely."),

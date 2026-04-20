@@ -19,12 +19,15 @@ import (
     "context"
     "fmt"
 
+    sdk "github.com/anthropics/anthropic-sdk-go"
+
     "github.com/axonframework/axon/kernel"
     "github.com/axonframework/axon/providers/anthropic"
 )
 
 func main() {
-    llm := anthropic.New("claude-3-5-haiku-20241022")
+    client := sdk.NewClient() // reads ANTHROPIC_API_KEY from env
+    llm := anthropic.New(&client, sdk.ModelClaudeHaiku4_5)
 
     agent := kernel.NewAgent(
         kernel.WithModel(llm),

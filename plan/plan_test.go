@@ -1,4 +1,3 @@
-// contrib/plan/plan_test.go
 package plan
 
 import (
@@ -64,6 +63,60 @@ func TestNewNoSteps(t *testing.T) {
 	}
 	if p.Notes == nil {
 		t.Error("expected Notes map to be initialized")
+	}
+}
+
+func TestEmptyHasNoStepsNoNameNoGoal(t *testing.T) {
+	p := Empty()
+	if p.Name != "" {
+		t.Errorf("expected empty name, got %q", p.Name)
+	}
+	if p.Goal != "" {
+		t.Errorf("expected empty goal, got %q", p.Goal)
+	}
+	if len(p.Steps) != 0 {
+		t.Errorf("expected no steps, got %d", len(p.Steps))
+	}
+	if p.Notes == nil {
+		t.Error("expected Notes map initialized")
+	}
+}
+
+func TestIsCompleteEmptyPlan(t *testing.T) {
+	p := Empty()
+	if p.IsComplete() {
+		t.Error("expected empty plan not to be complete")
+	}
+}
+
+func TestIsCompleteTransitions(t *testing.T) {
+	p := New("Test", "Goal",
+		Step{Name: "s1", Description: "First"},
+		Step{Name: "s2", Description: "Second"},
+	)
+
+	if p.IsComplete() {
+		t.Error("all pending should not be complete")
+	}
+
+	p.Steps[0].Status = StatusDone
+	if p.IsComplete() {
+		t.Error("one done, one pending should not be complete")
+	}
+
+	p.Steps[1].Status = StatusActive
+	if p.IsComplete() {
+		t.Error("active step should not count as complete")
+	}
+
+	p.Steps[1].Status = StatusSkipped
+	if !p.IsComplete() {
+		t.Error("done + skipped should be complete")
+	}
+
+	p.Steps[1].Status = StatusDone
+	if !p.IsComplete() {
+		t.Error("all done should be complete")
 	}
 }
 

@@ -50,10 +50,10 @@ func main() {
 | **kernel**           | `github.com/axonframework/axon/kernel`           | Agent, Tool, LLM, Message — the core. Zero dependencies.                  |
 | **middleware**       | `github.com/axonframework/axon/middleware`       | LLM wrappers: retry, logging, timeout, cost tracking, routing, cascade.   |
 | **workflow**         | `github.com/axonframework/axon/workflow`         | Compose agents and functions: sequential, parallel, routing, retry loops. |
+| **plan**             | `github.com/axonframework/axon/plan`             | Agent-authored multi-step procedures with auditable progress tracking.    |
 | **testing**          | `github.com/axonframework/axon/testing`          | MockLLM, assertion helpers, ScoreCard evaluation, batch testing.          |
 | **interfaces**       | `github.com/axonframework/axon/interfaces`       | HistoryStore, MemoryStore, Guard contracts + in-memory implementations.   |
 | **providers/google** | `github.com/axonframework/axon/providers/google` | Google Gemini LLM adapter.                                                |
-| **contrib/plan**     | `github.com/axonframework/axon/contrib/plan`     | Multi-step procedure tracking for complex agent flows.                    |
 | **contrib/mongo**    | `github.com/axonframework/axon/contrib/mongo`    | MongoDB-backed HistoryStore and MemoryStore.                              |
 
 Each package is a separate Go module. Import only what you need — `kernel/` has zero external dependencies.
@@ -88,7 +88,7 @@ See [`examples/`](examples/) for runnable code:
 | [05-workflow](examples/05-workflow/)             | Parallel steps, routing, retry loops             |
 | [06-testing](examples/06-testing/)               | MockLLM, assertions, ScoreCard                   |
 | [07-restaurant-bot](examples/07-restaurant-bot/) | Full toy application tying all packages together |
-| [08-plan](examples/08-plan/)                     | Multi-step procedure tracking with contrib/plan  |
+| [08-plan](examples/08-plan/)                     | Agent self-planning with the `plan` package      |
 
 ## Documentation
 
@@ -98,10 +98,10 @@ See [`examples/`](examples/) for runnable code:
 - [Streaming Guide](docs/streaming.md) — Stream vs Run, events
 - [Middleware Guide](docs/middleware.md) — retry, logging, routing, cascade
 - [Workflow Guide](docs/workflow.md) — orchestration patterns
+- [Plan Guide](docs/plan.md) — agent-authored multi-step procedures
 - [Testing Guide](docs/testing.md) — mocking, assertions, evaluation
 - [Interfaces Guide](docs/interfaces.md) — persistence and guards
 - **Contrib Guides:**
-  - [Plan](docs/contrib/plan.md) — multi-step procedure tracking
   - [MongoDB](docs/contrib/mongo.md) — persistent history and memory storage
 
 ## License

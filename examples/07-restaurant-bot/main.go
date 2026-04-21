@@ -21,7 +21,7 @@ import (
 	"log/slog"
 	"os"
 
-	axontest "github.com/axonframework/axon/testing"
+	"github.com/axonframework/axon/axontest"
 )
 
 func main() {

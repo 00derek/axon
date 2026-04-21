@@ -10,6 +10,6 @@ use (
 	./providers/anthropic
 	./providers/google
 	./providers/openai
-	./testing
+	./axontest
 	./workflow
 )

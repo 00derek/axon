@@ -29,9 +29,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/axonframework/axon/axontest"
 	"github.com/axonframework/axon/kernel"
 	"github.com/axonframework/axon/middleware"
-	axontest "github.com/axonframework/axon/testing"
 )
 
 func main() {

@@ -29,9 +29,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/axonframework/axon/axontest"
 	"github.com/axonframework/axon/kernel"
 	"github.com/axonframework/axon/plan"
-	axontest "github.com/axonframework/axon/testing"
 )
 
 func main() {

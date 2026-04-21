@@ -20,8 +20,8 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/axonframework/axon/axontest"
 	"github.com/axonframework/axon/kernel"
-	axontest "github.com/axonframework/axon/testing"
 )
 
 // testLogger returns a silent structured logger suitable for tests.

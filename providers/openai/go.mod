@@ -1,6 +1,6 @@
 module github.com/axonframework/axon/providers/openai
 
-go 1.25.2
+go 1.26.2
 
 replace github.com/axonframework/axon/kernel => ../../kernel
 

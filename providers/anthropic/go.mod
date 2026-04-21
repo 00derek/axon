@@ -1,6 +1,6 @@
 module github.com/axonframework/axon/providers/anthropic
 
-go 1.25.2
+go 1.26.2
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.37.0

@@ -589,9 +589,9 @@ func TestAttachRegistersTools(t *testing.T) {
 	)
 
 	opts := Attach(p)
-	// Attach should return at least 3 options (OnStart, PrepareRound, WithTools).
-	if len(opts) < 3 {
-		t.Fatalf("expected at least 3 agent options, got %d", len(opts))
+	// Attach returns OnStart and PrepareRound; tools are registered via OnStart.
+	if len(opts) < 2 {
+		t.Fatalf("expected at least 2 agent options, got %d", len(opts))
 	}
 
 	// Build an agent and verify the tools are registered.
@@ -620,5 +620,43 @@ func TestAttachRegistersTools(t *testing.T) {
 	}
 	if !toolNames["add_note"] {
 		t.Error("expected add_note tool to be registered")
+	}
+}
+
+// TestAttachDoesNotClobberUserTools verifies that combining plan.Attach with
+// kernel.WithTools(userTool) preserves both plan tools and user tools.
+// Previously, WithTools replaced the tool slice, silently dropping plan tools.
+func TestAttachDoesNotClobberUserTools(t *testing.T) {
+	p := New("test", "goal", Step{Name: "s1", Description: "step"})
+
+	userTool := kernel.NewTool(
+		"my_tool", "A user-defined tool",
+		func(ctx context.Context, _ struct{}) (string, error) { return "ok", nil },
+	)
+
+	llm := newFakeLLM(kernel.Response{Text: "ok", FinishReason: "stop"})
+
+	// WithTools(userTool) comes after Attach — the collision pattern.
+	opts := append(Attach(p), kernel.WithModel(llm), kernel.WithTools(userTool))
+	agent := kernel.NewAgent(opts...)
+
+	_, err := agent.Run(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	llm.mu.Lock()
+	params := llm.captured[0]
+	llm.mu.Unlock()
+
+	toolNames := make(map[string]bool)
+	for _, tool := range params.Tools {
+		toolNames[tool.Name()] = true
+	}
+
+	for _, name := range []string{"mark_step", "add_note", "my_tool"} {
+		if !toolNames[name] {
+			t.Errorf("expected tool %q visible to LLM, got: %v", name, toolNames)
+		}
 	}
 }

@@ -78,6 +78,10 @@ func Attach(p *Plan) []kernel.AgentOption {
 		defer mu.Unlock()
 		// Capture the base system prompt so PrepareRound can preserve it.
 		basePrompt = tc.AgentCtx.SystemPrompt()
+		// Register plan tools into the live context rather than at construction
+		// time. This prevents kernel.WithTools(userTools) from clobbering plan
+		// tools when it appears after plan.Attach in the options slice.
+		tc.AgentCtx.AddTools(markStep, addNote)
 		activateNextPending(p)
 	})
 
@@ -99,7 +103,6 @@ func Attach(p *Plan) []kernel.AgentOption {
 	return []kernel.AgentOption{
 		onStart,
 		prepareRound,
-		kernel.WithTools(markStep, addNote),
 	}
 }
 

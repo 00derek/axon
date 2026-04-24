@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/axonframework/axon/axontest"
 	"github.com/axonframework/axon/kernel"
-	axontest "github.com/axonframework/axon/testing"
 )
 
 // LookupParams holds parameters for the "lookup" tool.

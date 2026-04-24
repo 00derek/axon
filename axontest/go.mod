@@ -1,4 +1,4 @@
-module github.com/axonframework/axon/workflow
+module github.com/axonframework/axon/axontest
 
 go 1.26.2
 

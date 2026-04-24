@@ -1,4 +1,3 @@
-// contrib/plan/format_test.go
 package plan
 
 import (
@@ -101,6 +100,13 @@ func TestFormatNoSteps(t *testing.T) {
 	got := Format(p)
 	assertContains(t, got, "## Current Plan: Empty")
 	assertContains(t, got, "Goal: No steps")
+}
+
+func TestFormatEmptyPlanPlaceholder(t *testing.T) {
+	p := Empty()
+	got := Format(p)
+	assertContains(t, got, "(not yet created)")
+	assertContains(t, got, "create_plan")
 }
 
 // assertContains is a test helper that checks if got contains want.

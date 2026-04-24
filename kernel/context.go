@@ -2,9 +2,13 @@
 package kernel
 
 // AgentContext holds the state visible to the agent during a turn:
-// conversation messages and available tools.
+// conversation messages, available tools, and capability-attached state.
 type AgentContext struct {
 	Messages []Message
+	// State is a capability-provided bag — hooks and tools can stash typed
+	// values here that travel alongside the conversation. Keys should be
+	// package-qualified to avoid collisions (e.g. "plan" from the plan pkg).
+	State    map[string]any
 	tools    []Tool
 	disabled map[string]bool
 }
@@ -15,6 +19,7 @@ func NewAgentContext(tools []Tool) *AgentContext {
 		tools = []Tool{}
 	}
 	return &AgentContext{
+		State:    make(map[string]any),
 		tools:    tools,
 		disabled: make(map[string]bool),
 	}

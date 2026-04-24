@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   test:
@@ -13,19 +13,20 @@ jobs:
       matrix:
         module:
           - kernel
+          - middleware
           - workflow
           - interfaces
-          - middleware
-          - testing
-          - contrib/plan
-          - contrib/mongo
+          - plan
+          - axontest
           - providers/google
+          - providers/anthropic
+          - providers/openai
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.26"
 
       - name: Run tests
         working-directory: ${{ matrix.module }}

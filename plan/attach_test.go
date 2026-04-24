@@ -710,3 +710,41 @@ func TestAgentSeededFullFlow(t *testing.T) {
 		t.Errorf("expected cuisine=Italian note")
 	}
 }
+
+// TestEnableDoesNotClobberUserTools verifies that combining plan.Enable with
+// kernel.WithTools(userTool) preserves both plan tools and user tools.
+// Previously, WithTools replaced the tool slice, silently dropping plan tools.
+func TestEnableDoesNotClobberUserTools(t *testing.T) {
+	p := Empty()
+
+	userTool := kernel.NewTool(
+		"my_tool", "A user-defined tool",
+		func(ctx context.Context, _ struct{}) (string, error) { return "ok", nil },
+	)
+
+	llm := newFakeLLM(kernel.Response{Text: "ok", FinishReason: "stop"})
+
+	// WithTools(userTool) comes after Enable — the collision pattern.
+	opts := append(Enable(p), kernel.WithModel(llm), kernel.WithTools(userTool))
+	agent := kernel.NewAgent(opts...)
+
+	_, err := agent.Run(context.Background(), "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	llm.mu.Lock()
+	params := llm.captured[0]
+	llm.mu.Unlock()
+
+	toolNames := make(map[string]bool)
+	for _, tool := range params.Tools {
+		toolNames[tool.Name()] = true
+	}
+
+	for _, name := range []string{"create_plan", "append_step", "mark_step", "add_note", "my_tool"} {
+		if !toolNames[name] {
+			t.Errorf("expected tool %q visible to LLM, got: %v", name, toolNames)
+		}
+	}
+}

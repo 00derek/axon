@@ -117,6 +117,12 @@ func StopWhen(fn StopCondition) AgentOption {
 func (a *Agent) CloneWith(opts ...AgentOption) *Agent {
 	clone := *a
 	clone.tools = append([]Tool(nil), a.tools...)
+	clone.hooks.onStart = append(a.hooks.onStart[0:0:0], a.hooks.onStart...)
+	clone.hooks.onFinish = append(a.hooks.onFinish[0:0:0], a.hooks.onFinish...)
+	clone.hooks.prepareRound = append(a.hooks.prepareRound[0:0:0], a.hooks.prepareRound...)
+	clone.hooks.onRoundFinish = append(a.hooks.onRoundFinish[0:0:0], a.hooks.onRoundFinish...)
+	clone.hooks.onToolStart = append(a.hooks.onToolStart[0:0:0], a.hooks.onToolStart...)
+	clone.hooks.onToolEnd = append(a.hooks.onToolEnd[0:0:0], a.hooks.onToolEnd...)
 	for _, opt := range opts {
 		opt(&clone)
 	}

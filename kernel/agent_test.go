@@ -367,3 +367,52 @@ func TestAgentParallelToolExecution(t *testing.T) {
 		t.Errorf("expected %q, got %q", "both done", result.Text)
 	}
 }
+
+// TestCloneWithDeepCopiesHookSlices verifies that hook slices are not aliased
+// between a parent and its clones. With 3 base hooks Go allocates cap=4,
+// leaving spare capacity; without deep-copying, two clones from the same
+// parent both write to backing[3] and the second clobbers the first's hook.
+func TestCloneWithDeepCopiesHookSlices(t *testing.T) {
+	var called []string
+	record := func(name string) func(*TurnContext) {
+		return func(*TurnContext) { called = append(called, name) }
+	}
+
+	base := NewAgent(
+		WithModel(newFakeLLM(Response{Text: "ok", FinishReason: "stop"})),
+		OnStart(record("h1")),
+		OnStart(record("h2")),
+		OnStart(record("h3")),
+	)
+
+	clone1 := base.CloneWith(
+		WithModel(newFakeLLM(Response{Text: "ok", FinishReason: "stop"})),
+		OnStart(record("clone1")),
+	)
+	_ = base.CloneWith(
+		WithModel(newFakeLLM(Response{Text: "ok", FinishReason: "stop"})),
+		OnStart(record("clone2")),
+	)
+
+	// Running clone1 must fire clone1's hook, not clone2's.
+	called = nil
+	if _, err := clone1.Run(context.Background(), "hi"); err != nil {
+		t.Fatalf("clone1.Run: %v", err)
+	}
+
+	sawClone1, sawClone2 := false, false
+	for _, c := range called {
+		if c == "clone1" {
+			sawClone1 = true
+		}
+		if c == "clone2" {
+			sawClone2 = true
+		}
+	}
+	if !sawClone1 {
+		t.Error("clone1's hook did not fire — was overwritten by clone2's hook (aliased backing array)")
+	}
+	if sawClone2 {
+		t.Error("clone2's hook fired when running clone1 — hook slices share a backing array")
+	}
+}

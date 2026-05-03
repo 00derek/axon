@@ -191,6 +191,10 @@ func Enable(p *Plan) []kernel.AgentOption {
 			tc.AgentCtx.State = make(map[string]any)
 		}
 		tc.AgentCtx.State[StateKey] = p
+		// Register plan tools into the live context rather than at construction
+		// time. This prevents kernel.WithTools(userTools) from clobbering plan
+		// tools when it appears after plan.Enable in the options slice.
+		tc.AgentCtx.AddTools(createPlan, appendStep, markStep, addNote)
 		// If the plan is already seeded, activate the first pending step.
 		activateNextPending(p)
 	})
@@ -213,7 +217,6 @@ func Enable(p *Plan) []kernel.AgentOption {
 	return []kernel.AgentOption{
 		onStart,
 		prepareRound,
-		kernel.WithTools(createPlan, appendStep, markStep, addNote),
 	}
 }
 

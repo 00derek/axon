@@ -52,7 +52,8 @@ func main() {
 | **workflow**         | `github.com/axonframework/axon/workflow`         | Compose agents and functions: sequential, parallel, routing, retry loops. |
 | **plan**             | `github.com/axonframework/axon/plan`             | Agent-authored multi-step procedures with auditable progress tracking.    |
 | **axontest**         | `github.com/axonframework/axon/axontest`         | MockLLM, assertion helpers, ScoreCard evaluation, batch testing.          |
-| **interfaces**       | `github.com/axonframework/axon/interfaces`       | HistoryStore, MemoryStore, Guard contracts + in-memory implementations.   |
+| **interfaces**       | `github.com/axonframework/axon/interfaces`       | HistoryStore, MemoryStore, Guard / ToolGuard / OutputGuard contracts + in-memory implementations.   |
+| **guards**           | `github.com/axonframework/axon/guards`           | Capability that wires input, tool-param, and output guards from one config. |
 | **providers/anthropic** | `github.com/axonframework/axon/providers/anthropic` | Anthropic Claude LLM adapter.                                          |
 | **providers/google** | `github.com/axonframework/axon/providers/google` | Google Gemini LLM adapter.                                                |
 | **providers/openai** | `github.com/axonframework/axon/providers/openai` | OpenAI Chat Completions LLM adapter.                                      |

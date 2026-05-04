@@ -4,6 +4,7 @@ use (
 	./axontest
 	./contrib/mongo
 	./examples
+	./guards
 	./interfaces
 	./kernel
 	./middleware

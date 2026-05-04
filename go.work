@@ -1,6 +1,7 @@
 go 1.26.2
 
 use (
+	./axontest
 	./contrib/mongo
 	./examples
 	./interfaces
@@ -10,6 +11,6 @@ use (
 	./providers/anthropic
 	./providers/google
 	./providers/openai
-	./axontest
+	./session
 	./workflow
 )

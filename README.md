@@ -105,6 +105,7 @@ See [`examples/`](examples/) for runnable code:
 - [Plan Guide](docs/plan.md) — agent-authored multi-step procedures
 - [Testing Guide](docs/testing.md) — mocking, assertions, evaluation
 - [Interfaces Guide](docs/interfaces.md) — persistence and guards
+- [Session Guide](docs/session.md) — Session as a first-class conversation owner
 - **Contrib Guides:**
   - [MongoDB](docs/contrib/mongo.md) — persistent history and memory storage
 

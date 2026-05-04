@@ -11,6 +11,7 @@ require (
 	github.com/axonframework/axon/providers/anthropic v0.0.0
 	github.com/axonframework/axon/providers/openai v0.0.0
 	github.com/axonframework/axon/axontest v0.0.0
+	github.com/axonframework/axon/session v0.0.0
 	github.com/axonframework/axon/workflow v0.0.0
 	github.com/openai/openai-go/v3 v3.32.0
 )
@@ -31,5 +32,6 @@ replace (
 	github.com/axonframework/axon/providers/anthropic => ../providers/anthropic
 	github.com/axonframework/axon/providers/openai => ../providers/openai
 	github.com/axonframework/axon/axontest => ../axontest
+	github.com/axonframework/axon/session => ../session
 	github.com/axonframework/axon/workflow => ../workflow
 )

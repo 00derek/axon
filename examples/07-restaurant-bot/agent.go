@@ -1,8 +1,9 @@
 // examples/07-restaurant-bot/agent.go
 //
 // Agent construction for the restaurant bot example.
-// Demonstrates middleware composition, lifecycle hooks, guard integration,
-// and history persistence in a single NewRestaurantAgent constructor.
+// Demonstrates middleware composition, a guard hook, and tool logging — with
+// conversation history handled by the session.Session lifecycle owner so the
+// agent itself never has to load or persist messages.
 package main
 
 import (
@@ -51,12 +52,13 @@ func NewDefaultConfig(llm kernel.LLM, logger *slog.Logger) BotConfig {
 	}
 }
 
-// NewRestaurantAgent builds a fully configured restaurant bot agent.
-// It stacks middleware (retry, timeout, logging, cost tracking), registers
-// lifecycle hooks for guard checks, history load/save, and tool logging,
-// and sets the restaurant assistant system prompt.
-func NewRestaurantAgent(cfg BotConfig, sessionID string) *kernel.Agent {
-	// Stack middleware: retry → timeout → logging → cost tracking → raw LLM.
+// NewRestaurantAgent builds the restaurant bot agent.
+//
+// History load / persist used to live here as OnStart / OnFinish hooks; it is
+// now the responsibility of session.Session.Run, so this constructor only
+// concerns itself with what is genuinely agent-scoped: middleware, the guard,
+// and tool logging.
+func NewRestaurantAgent(cfg BotConfig) *kernel.Agent {
 	wrappedLLM := middleware.Wrap(
 		cfg.LLM,
 		middleware.WithRetry(3, 200*time.Millisecond),
@@ -71,9 +73,9 @@ func NewRestaurantAgent(cfg BotConfig, sessionID string) *kernel.Agent {
 		kernel.WithTools(AllTools()...),
 		kernel.WithMaxRounds(10),
 
-		// OnStart: run the guard and, if allowed, prepend conversation history.
+		// OnStart: run the guard. If the input is blocked, disable all tools
+		// so the agent can only return a refusal.
 		kernel.OnStart(func(tc *kernel.TurnContext) {
-			// Guard check
 			result, err := cfg.Guard.Check(context.Background(), tc.Input)
 			if err != nil {
 				cfg.Logger.Error("guard check error", "error", err)
@@ -81,51 +83,16 @@ func NewRestaurantAgent(cfg BotConfig, sessionID string) *kernel.Agent {
 			}
 			if !result.Allowed {
 				cfg.Logger.Warn("input blocked by guard", "reason", result.Reason)
-				// Disable all tools so the agent returns a refusal without tool access.
 				tc.AgentCtx.DisableTools(
 					"search_restaurants", "get_weather", "get_menu", "make_reservation",
 				)
-				return
-			}
-
-			// Load prior history and prepend it to the conversation.
-			msgs, err := cfg.HistoryStore.LoadMessages(context.Background(), sessionID, 20)
-			if err != nil {
-				cfg.Logger.Error("history load error", "session", sessionID, "error", err)
-				return
-			}
-			if len(msgs) > 0 {
-				cfg.Logger.Info("history loaded", "session", sessionID, "messages", len(msgs))
-				// Insert history before the current user message (last element).
-				current := tc.AgentCtx.Messages
-				if len(current) > 0 {
-					head := current[:len(current)-1]
-					tail := current[len(current)-1:]
-					tc.AgentCtx.Messages = append(append(head, msgs...), tail...)
-				}
 			}
 		}),
 
-		// OnFinish: persist the new turn (user input + assistant response) to history.
-		kernel.OnFinish(func(tc *kernel.TurnContext) {
-			if tc.Result == nil || tc.Result.Text == "" {
-				return
-			}
-			newMsgs := []kernel.Message{
-				kernel.UserMsg(tc.Input),
-				kernel.AssistantMsg(tc.Result.Text),
-			}
-			if err := cfg.HistoryStore.SaveMessages(context.Background(), sessionID, newMsgs); err != nil {
-				cfg.Logger.Error("history save error", "session", sessionID, "error", err)
-			}
-		}),
-
-		// OnToolStart: log when a tool is about to be called.
 		kernel.OnToolStart(func(tc *kernel.ToolContext) {
 			cfg.Logger.Info("tool start", "tool", tc.ToolName)
 		}),
 
-		// OnToolEnd: log the outcome of a tool call.
 		kernel.OnToolEnd(func(tc *kernel.ToolContext) {
 			if tc.Error != nil {
 				cfg.Logger.Error("tool error", "tool", tc.ToolName, "error", tc.Error)

@@ -26,6 +26,11 @@ type StopCondition func(ctx *RoundContext) bool
 
 // TurnContext is available to OnStart and OnFinish hooks.
 type TurnContext struct {
+	// Ctx is the active context.Context for the turn — the same ctx passed
+	// to Agent.Run / Agent.Stream. Hooks can use it to create OTel child
+	// spans, observe cancellation (via Ctx.Done / Ctx.Err), or read
+	// request-scoped values set by callers upstream.
+	Ctx      context.Context
 	AgentCtx *AgentContext
 	Input    string
 	Result   *Result
@@ -33,6 +38,8 @@ type TurnContext struct {
 
 // RoundContext is available to PrepareRound, OnRoundFinish, and StopWhen.
 type RoundContext struct {
+	// Ctx is the active context.Context for the round. See TurnContext.Ctx.
+	Ctx          context.Context
 	AgentCtx     *AgentContext
 	RoundNumber  int
 	LastResponse *Response
@@ -40,6 +47,8 @@ type RoundContext struct {
 
 // ToolContext is available to OnToolStart and OnToolEnd hooks.
 type ToolContext struct {
+	// Ctx is the active context.Context for the tool call. See TurnContext.Ctx.
+	Ctx      context.Context
 	ToolName string
 	Params   json.RawMessage
 	Result   any
@@ -147,7 +156,7 @@ func (a *Agent) Run(ctx context.Context, input string) (*Result, error) {
 	}
 	agentCtx.AddMessages(UserMsg(input))
 
-	turnCtx := &TurnContext{AgentCtx: agentCtx, Input: input}
+	turnCtx := &TurnContext{Ctx: ctx, AgentCtx: agentCtx, Input: input}
 
 	// Fire OnStart hooks
 	for _, fn := range a.hooks.onStart {
@@ -162,6 +171,7 @@ func (a *Agent) Run(ctx context.Context, input string) (*Result, error) {
 	// Agent loop
 	for round := 0; round < a.maxRounds; round++ {
 		roundCtx := &RoundContext{
+			Ctx:          ctx,
 			AgentCtx:     agentCtx,
 			RoundNumber:  round,
 			LastResponse: lastResponse,
@@ -317,6 +327,7 @@ func (a *Agent) executeSingleTool(ctx context.Context, agentCtx *AgentContext, c
 	}
 
 	toolCtx := &ToolContext{
+		Ctx:      ctx,
 		ToolName: call.Name,
 		Params:   call.Params,
 	}

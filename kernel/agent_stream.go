@@ -70,7 +70,7 @@ func (a *Agent) runWithEvents(ctx context.Context, input string, sr *StreamResul
 	}
 	agentCtx.AddMessages(UserMsg(input))
 
-	turnCtx := &TurnContext{AgentCtx: agentCtx, Input: input}
+	turnCtx := &TurnContext{Ctx: ctx, AgentCtx: agentCtx, Input: input}
 
 	for _, fn := range a.hooks.onStart {
 		fn(turnCtx)
@@ -83,6 +83,7 @@ func (a *Agent) runWithEvents(ctx context.Context, input string, sr *StreamResul
 
 	for round := 0; round < a.maxRounds; round++ {
 		roundCtx := &RoundContext{
+			Ctx:          ctx,
 			AgentCtx:     agentCtx,
 			RoundNumber:  round,
 			LastResponse: lastResponse,
@@ -226,7 +227,7 @@ func (a *Agent) executeSingleToolWithEvents(ctx context.Context, agentCtx *Agent
 		return ToolCallResult{}, fmt.Errorf("tool %q not found", call.Name)
 	}
 
-	toolCtx := &ToolContext{ToolName: call.Name, Params: call.Params}
+	toolCtx := &ToolContext{Ctx: ctx, ToolName: call.Name, Params: call.Params}
 
 	// Emit event + fire hooks
 	sr.eventCh <- ToolStartEvent{ToolName: call.Name, Params: call.Params}

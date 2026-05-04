@@ -148,9 +148,10 @@ Turn Start
 
 ```go
 type TurnContext struct {
-    AgentCtx *AgentContext // live conversation state; mutate to alter behavior
-    Input    string        // the original user message passed to Run()
-    Result   *Result       // nil in OnStart; populated in OnFinish
+    Ctx      context.Context // active ctx from Run/Stream — see "Ctx field" below
+    AgentCtx *AgentContext   // live conversation state; mutate to alter behavior
+    Input    string          // the original user message passed to Run()
+    Result   *Result         // nil in OnStart; populated in OnFinish
 }
 ```
 
@@ -158,9 +159,10 @@ type TurnContext struct {
 
 ```go
 type RoundContext struct {
-    AgentCtx     *AgentContext // live conversation state
-    RoundNumber  int           // 0-based index of the current round
-    LastResponse *Response     // nil in round 0; the previous LLM response otherwise
+    Ctx          context.Context // active ctx from Run/Stream — see "Ctx field" below
+    AgentCtx     *AgentContext   // live conversation state
+    RoundNumber  int             // 0-based index of the current round
+    LastResponse *Response       // nil in round 0; the previous LLM response otherwise
 }
 ```
 
@@ -168,6 +170,7 @@ type RoundContext struct {
 
 ```go
 type ToolContext struct {
+    Ctx      context.Context // active ctx from Run/Stream — see "Ctx field" below
     ToolName string          // name of the tool being called
     Params   json.RawMessage // raw JSON params from the model
     Result   any             // nil in OnToolStart; populated in OnToolEnd
@@ -175,20 +178,53 @@ type ToolContext struct {
 }
 ```
 
+#### The `Ctx` field
+
+Every hook context carries `Ctx`, the same `context.Context` you passed to
+`Agent.Run` (or `Agent.Stream`). The kernel populates `Ctx` immediately before
+firing each hook, so it is always non-nil and reflects the live request scope.
+
+Use `Ctx` to:
+
+- **Tracing**: open an OTel child span from inside a hook
+  (`tracer.Start(tc.Ctx, "agent.tool")`) and have it nest under the caller's
+  span automatically.
+- **Cancellation**: long-running hook work can return early via
+  `select { case <-rc.Ctx.Done(): ... }` or check `rc.Ctx.Err()` to react to
+  upstream cancellation/deadline expiry.
+- **Request-scoped values**: read values stashed by upstream middleware
+  (request IDs, auth principals, tenant info) with `tc.Ctx.Value(myKey)`.
+
+```go
+kernel.OnToolStart(func(tc *kernel.ToolContext) {
+    ctx, span := tracer.Start(tc.Ctx, "tool."+tc.ToolName)
+    span.SetAttributes(attribute.String("params", string(tc.Params)))
+    // stash span on AgentCtx state if you need to End() it in OnToolEnd
+    _ = ctx
+})
+```
+
+Note: hooks receive `Ctx` for read access; they don't replace the ctx the
+kernel uses for the LLM call or tool execution. To inject deadlines or values
+into downstream calls, wrap the ctx before passing it to `Run` / `Stream`.
+
 ### Context availability at a glance
 
 ```
 TurnContext (OnStart/OnFinish)
+├─ Ctx       → active context.Context (tracing, cancellation, values)
 ├─ AgentCtx  → modify tools, messages, system prompt
 ├─ Input     → the user's input string
 └─ Result    → nil in OnStart, populated in OnFinish
 
 RoundContext (PrepareRound/OnRoundFinish)
+├─ Ctx          → active context.Context
 ├─ AgentCtx     → modify tools, messages
 ├─ RoundNumber  → which round (0-indexed)
 └─ LastResponse → nil on first round
 
 ToolContext (OnToolStart/OnToolEnd)
+├─ Ctx       → active context.Context
 ├─ ToolName  → which tool
 ├─ Params    → raw JSON params
 ├─ Result    → nil in OnToolStart

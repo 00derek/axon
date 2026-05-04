@@ -131,3 +131,76 @@ func TestAgentStreamEvents(t *testing.T) {
 		t.Error("expected TextDeltaEvent")
 	}
 }
+
+// TestAgentStreamHookContextsCarryCtx mirrors the non-streaming test: every
+// hook fired during Stream must see a non-nil Ctx that carries the parent
+// values from the ctx passed to Stream.
+func TestAgentStreamHookContextsCarryCtx(t *testing.T) {
+	type ctxKey string
+	const key ctxKey = "trace-id"
+
+	parent := context.WithValue(context.Background(), key, "stream-xyz")
+
+	searchTool := NewTool("search", "Search",
+		func(ctx context.Context, p searchParams) (string, error) { return "found", nil },
+	)
+
+	llm := newFakeLLM(
+		Response{
+			ToolCalls:    []ToolCall{{ID: "c1", Name: "search", Params: json.RawMessage(`{"query":"test","location":"here"}`)}},
+			FinishReason: "tool_calls",
+		},
+		Response{Text: "Done!", FinishReason: "stop"},
+	)
+
+	var (
+		onStartCtx       context.Context
+		onFinishCtx      context.Context
+		prepareRoundCtx  context.Context
+		onRoundFinishCtx context.Context
+		onToolStartCtx   context.Context
+		onToolEndCtx     context.Context
+	)
+
+	agent := NewAgent(
+		WithModel(llm),
+		WithTools(searchTool),
+		OnStart(func(tc *TurnContext) { onStartCtx = tc.Ctx }),
+		OnFinish(func(tc *TurnContext) { onFinishCtx = tc.Ctx }),
+		PrepareRound(func(rc *RoundContext) { prepareRoundCtx = rc.Ctx }),
+		OnRoundFinish(func(rc *RoundContext) { onRoundFinishCtx = rc.Ctx }),
+		OnToolStart(func(tc *ToolContext) { onToolStartCtx = tc.Ctx }),
+		OnToolEnd(func(tc *ToolContext) { onToolEndCtx = tc.Ctx }),
+	)
+
+	sr, err := agent.Stream(parent, "test")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Drain so the goroutine completes.
+	for range sr.Events() {
+	}
+	for range sr.Text() {
+	}
+	_ = sr.Result()
+
+	for _, c := range []struct {
+		name string
+		ctx  context.Context
+	}{
+		{"OnStart", onStartCtx},
+		{"OnFinish", onFinishCtx},
+		{"PrepareRound", prepareRoundCtx},
+		{"OnRoundFinish", onRoundFinishCtx},
+		{"OnToolStart", onToolStartCtx},
+		{"OnToolEnd", onToolEndCtx},
+	} {
+		if c.ctx == nil {
+			t.Errorf("%s: Ctx was nil; expected populated context", c.name)
+			continue
+		}
+		if got, _ := c.ctx.Value(key).(string); got != "stream-xyz" {
+			t.Errorf("%s: Ctx did not carry parent value; got %q", c.name, got)
+		}
+	}
+}

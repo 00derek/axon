@@ -1,18 +1,24 @@
 # Interfaces
 
-Axon defines four contracts that separate persistence and safety concerns from
-agent logic: `HistoryStore`, `MemoryStore`, `Guard`, and `Embedder`. Each
-interface lives in `github.com/axonframework/axon/interfaces`. Thread-safe
-in-memory reference implementations are provided in the
+Axon defines six contracts that separate persistence and safety concerns from
+agent logic: `HistoryStore`, `MemoryStore`, `Guard`, `ToolGuard`,
+`OutputGuard`, and `Embedder`. Each interface lives in
+`github.com/axonframework/axon/interfaces`. Thread-safe in-memory reference
+implementations are provided in the
 `github.com/axonframework/axon/interfaces/inmemory` package for development and
 testing. Bring your own implementations for production.
+
+The three guard interfaces (`Guard`, `ToolGuard`, `OutputGuard`) cover the three
+points an agent can be intercepted: at input time, before each tool call, and
+on the final response. The `guards/` capability package wires all three from a
+single configuration — see [§ 3.4 Guards capability](#34-guards-capability--wiring-all-three) for the recommended pattern.
 
 ---
 
 ## Hook integration overview
 
 The diagram below shows how stores and guards plug into the agent lifecycle via
-`OnStart` and `OnFinish` hooks.
+`OnStart`, `OnToolStart`, and `OnFinish` hooks.
 
 ```
 agent.Run(ctx, "user input")
@@ -23,9 +29,13 @@ agent.Run(ctx, "user input")
 │  └─ MemoryStore.Search(userID, input) ──► inject as system message
 │
 ├─ Agent loop (rounds)
-│  └─ ... LLM generates, tools execute ...
+│  ├─ LLM generates ──► tool calls
+│  └─ For each tool call:
+│     └─ ToolGuard.Check(name, params) ──► blocked? → tool error to LLM
+│        (loop continues; model can adjust on next round)
 │
 └─ OnFinish
+   ├─ OutputGuard.Check(text) ──► blocked? → replace Result.Text, set state flag
    ├─ HistoryStore.SaveMessages(sessionID, newMessages)
    └─ MemoryStore.Save(userID, extractedMemories)  ← async/optional
 ```
@@ -194,85 +204,130 @@ for _, m := range results {
 
 ---
 
-## 3. Guard
+## 3. Guard, ToolGuard, OutputGuard
 
-`Guard` validates user input before it reaches the agent. Returning
-`Allowed: false` lets the caller intercept the request and return a refusal
-without invoking the model.
+Axon exposes three guard interfaces — one per interception point in the agent
+lifecycle. They share a single `GuardResult` shape:
 
 ```go
-type Guard interface {
-    Check(ctx context.Context, input string) (GuardResult, error)
-}
-
 type GuardResult struct {
     Allowed bool   `json:"allowed"`
     Reason  string `json:"reason,omitempty"`
 }
 ```
 
-### NewBlocklistGuard
+### 3.1 Guard — input validation
 
-`NewBlocklistGuard` creates a `Guard` that rejects input containing any of the
-provided phrases. Matching is case-insensitive substring matching. When
-multiple phrases match, the one at the earliest position in the input causes
-rejection.
+`Guard` validates the user input before the model sees it.
+
+```go
+type Guard interface {
+    Check(ctx context.Context, input string) (GuardResult, error)
+}
+```
+
+`NewBlocklistGuard(blocked []string) Guard` rejects input containing any of the
+given phrases (case-insensitive substring match; earliest match wins).
 
 ```go
 guard := interfaces.NewBlocklistGuard([]string{
     "ignore previous instructions",
     "jailbreak",
-    "forget your instructions",
 })
-
-result, err := guard.Check(ctx, userInput)
-if err != nil {
-    // handle error
-}
-if !result.Allowed {
-    fmt.Println("blocked:", result.Reason)
-}
 ```
 
-### Check flow
+### 3.2 ToolGuard — tool-call validation
 
-```
-Guard.Check(ctx, "user input")
-│
-├─ Allowed: true  ──► agent proceeds normally
-│                      (all tools available, normal prompt)
-│
-└─ Allowed: false ──► OnStart hook reacts:
-   Reason: "blocked"   ├─ AgentCtx.DisableTools()
-                        ├─ AgentCtx.SetSystemPrompt("I can't help with that.")
-                        └─ Agent responds with safety message
-```
-
-### Integration pattern: OnStart hook
-
-Wire the guard into an agent's `OnStart` hook. If the input is blocked, disable
-tools so the model cannot take actions, and return early. The agent will still
-respond, but without tool access.
+`ToolGuard` validates a tool invocation immediately before the underlying tool
+runs. It receives the tool name and the raw JSON params produced by the LLM.
 
 ```go
-kernel.OnStart(func(tc *kernel.TurnContext) {
-    result, err := guard.Check(context.Background(), tc.Input)
-    if err != nil {
-        logger.Error("guard check error", "error", err)
-        return
-    }
-    if !result.Allowed {
-        logger.Warn("input blocked by guard", "reason", result.Reason)
-        tc.AgentCtx.DisableTools("search_restaurants", "make_reservation")
-        return
-    }
-
-    // Guard passed — continue with history loading or other setup.
-}),
+type ToolGuard interface {
+    Check(ctx context.Context, toolName string, params json.RawMessage) (GuardResult, error)
+}
 ```
 
-The restaurant bot (`examples/07-restaurant-bot/agent.go`) demonstrates this
-combined guard-then-history pattern in a single `OnStart` hook.
+`NewSimpleToolGuard(blockedTools []string) ToolGuard` blocks any tool whose
+exact name is in the blocklist. (Tool names are case-sensitive identifiers, so
+the comparison is exact-match — unlike the input/output blocklists which match
+natural-language phrases case-insensitively.)
+
+```go
+toolGuard := interfaces.NewSimpleToolGuard([]string{
+    "shell_exec", "delete_file",
+})
+```
+
+When a tool call is rejected, the underlying tool does **not** execute. The
+guard wrapper returns an error to the kernel, which surfaces it to the LLM as a
+tool-error message. The agent loop **continues** — the model can adjust and
+try a different action on the next round.
+
+### 3.3 OutputGuard — response validation
+
+`OutputGuard` validates the agent's final response text after the loop ends
+but before the result is returned to the caller.
+
+```go
+type OutputGuard interface {
+    Check(ctx context.Context, output string) (GuardResult, error)
+}
+```
+
+`NewSimpleOutputGuard(blocked []string) OutputGuard` rejects any final
+response containing one of the given phrases (case-insensitive substring
+match, mirroring `NewBlocklistGuard`).
+
+```go
+outputGuard := interfaces.NewSimpleOutputGuard([]string{
+    "social security number", "credit card",
+})
+```
+
+When the output is rejected, `Result.Text` is replaced with
+`"[blocked: <reason>]"` and a flag is recorded in `AgentContext.State` under
+`guards.StateOutputBlockedKey`. The `Run` does **not** return an error.
+
+### 3.4 Guards capability — wiring all three
+
+The `github.com/axonframework/axon/guards` package wires the three axes from a
+single configuration. Spread `Enable`'s result into `kernel.NewAgent`:
+
+```go
+import "github.com/axonframework/axon/guards"
+
+agent := kernel.NewAgent(append(baseOpts, guards.Enable(
+    guards.WithInput(interfaces.NewBlocklistGuard([]string{"jailbreak"})),
+    guards.WithTool(interfaces.NewSimpleToolGuard([]string{"shell_exec"})),
+    guards.WithOutput(interfaces.NewSimpleOutputGuard([]string{"ssn"})),
+)...)...)
+```
+
+`Enable` accepts any subset of the three options; passing zero options is a
+no-op. Each option installs the matching hook(s):
+
+| Option        | Hook used        | Rejection behavior                                                                                                  |
+| ------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `WithInput`   | `OnStart`        | Disables every registered tool for the turn so the model responds without tool access                              |
+| `WithTool`    | `OnStart` + tool wrapper | Wraps each tool's `Execute`; on rejection returns a tool error to the LLM and lets the agent loop continue   |
+| `WithOutput`  | `OnFinish`       | Replaces `Result.Text` with `[blocked: <reason>]` and sets `AgentContext.State[guards.StateOutputBlockedKey] = true` |
+
+Detecting an output rejection from caller code:
+
+```go
+result, _ := agent.Run(ctx, input)
+// Run does not error on output rejection. Inspect via Result.Text prefix or
+// (when you need the structured signal) via AgentContext state — see the
+// guards package docs for accessing State outside of a hook.
+```
+
+### Choosing between hand-rolled hooks and the guards capability
+
+The restaurant bot (`examples/07-restaurant-bot/agent.go`) shows a hand-rolled
+`OnStart` that combines a guard check with history loading. That pattern is
+still useful when you need custom rejection logic (e.g. set a refusal system
+prompt). Use `guards.Enable` when standard rejection behavior is sufficient
+and you want declarative composition of all three axes.
 
 ---
 

@@ -416,3 +416,97 @@ func TestCloneWithDeepCopiesHookSlices(t *testing.T) {
 		t.Error("clone2's hook fired when running clone1 — hook slices share a backing array")
 	}
 }
+
+// TestAgentHookContextsCarryCtx verifies that every hook (OnStart, OnFinish,
+// PrepareRound, OnRoundFinish, OnToolStart, OnToolEnd) receives a non-nil
+// context.Context on its hook context, populated from the ctx passed to Run.
+// This is what lets hooks create OTel child spans, observe ctx cancellation,
+// and read request-scoped values.
+func TestAgentHookContextsCarryCtx(t *testing.T) {
+	type ctxKey string
+	const key ctxKey = "trace-id"
+
+	parent := context.WithValue(context.Background(), key, "abc-123")
+
+	llm := newFakeLLM(
+		Response{
+			ToolCalls:    []ToolCall{{ID: "c1", Name: "search", Params: json.RawMessage(`{"query":"a","location":"b"}`)}},
+			FinishReason: "tool_calls",
+		},
+		Response{Text: "done", FinishReason: "stop"},
+	)
+
+	searchTool := NewTool("search", "Search",
+		func(ctx context.Context, p searchParams) (string, error) { return "ok", nil },
+	)
+
+	var (
+		onStartCtx       context.Context
+		onFinishCtx      context.Context
+		prepareRoundCtx  context.Context
+		onRoundFinishCtx context.Context
+		onToolStartCtx   context.Context
+		onToolEndCtx     context.Context
+	)
+
+	agent := NewAgent(
+		WithModel(llm),
+		WithTools(searchTool),
+		OnStart(func(tc *TurnContext) { onStartCtx = tc.Ctx }),
+		OnFinish(func(tc *TurnContext) { onFinishCtx = tc.Ctx }),
+		PrepareRound(func(rc *RoundContext) { prepareRoundCtx = rc.Ctx }),
+		OnRoundFinish(func(rc *RoundContext) { onRoundFinishCtx = rc.Ctx }),
+		OnToolStart(func(tc *ToolContext) { onToolStartCtx = tc.Ctx }),
+		OnToolEnd(func(tc *ToolContext) { onToolEndCtx = tc.Ctx }),
+	)
+
+	if _, err := agent.Run(parent, "test"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, c := range []struct {
+		name string
+		ctx  context.Context
+	}{
+		{"OnStart", onStartCtx},
+		{"OnFinish", onFinishCtx},
+		{"PrepareRound", prepareRoundCtx},
+		{"OnRoundFinish", onRoundFinishCtx},
+		{"OnToolStart", onToolStartCtx},
+		{"OnToolEnd", onToolEndCtx},
+	} {
+		if c.ctx == nil {
+			t.Errorf("%s: Ctx was nil; expected populated context", c.name)
+			continue
+		}
+		if got, _ := c.ctx.Value(key).(string); got != "abc-123" {
+			t.Errorf("%s: Ctx did not carry parent value; got %q", c.name, got)
+		}
+	}
+}
+
+// TestAgentHookCtxObservesCancellation verifies that a hook can observe
+// cancellation via the ctx supplied to Run. We cancel the parent ctx before
+// running and confirm Ctx.Err() is non-nil from inside OnStart.
+func TestAgentHookCtxObservesCancellation(t *testing.T) {
+	llm := newFakeLLM(Response{Text: "ok", FinishReason: "stop"})
+
+	parent, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before Run so the hook sees it immediately
+
+	var seenErr error
+	agent := NewAgent(
+		WithModel(llm),
+		OnStart(func(tc *TurnContext) {
+			if tc.Ctx != nil {
+				seenErr = tc.Ctx.Err()
+			}
+		}),
+	)
+
+	_, _ = agent.Run(parent, "hi")
+
+	if seenErr == nil {
+		t.Error("expected OnStart to observe ctx cancellation via tc.Ctx.Err()")
+	}
+}

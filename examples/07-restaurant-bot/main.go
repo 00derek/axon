@@ -8,6 +8,8 @@
 //   - Turn 3: making a reservation
 //
 // The agent uses MockLLM so the example runs without a real LLM API key.
+// Each turn is dispatched through a single session.Session value, which owns
+// history loading, persistence, and per-session metrics.
 //
 // Run with:
 //
@@ -22,35 +24,14 @@ import (
 	"os"
 
 	"github.com/axonframework/axon/axontest"
+	"github.com/axonframework/axon/session"
 )
 
 func main() {
-	// -------------------------------------------------------------------------
-	// Set up a structured logger that writes to stdout.
-	// -------------------------------------------------------------------------
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
 
-	// -------------------------------------------------------------------------
-	// Build a MockLLM with scripted responses for each LLM call (round).
-	//
-	// The agent loop calls the LLM once per round. When the LLM returns tool
-	// calls, the agent executes them and calls the LLM again with the results.
-	// Round numbering is global across all agent.Run() calls on the same MockLLM.
-	//
-	// Turn 1 — "Find Italian restaurants":
-	//   Round 0: LLM calls search_restaurants
-	//   Round 1: LLM receives results, returns final text
-	//
-	// Turn 2 — "Show me the menu for Bella Trattoria":
-	//   Round 2: LLM calls get_menu
-	//   Round 3: LLM receives menu, returns final text
-	//
-	// Turn 3 — "Book a table for 2 at 7 PM":
-	//   Round 4: LLM calls make_reservation
-	//   Round 5: LLM receives confirmation, returns final text
-	// -------------------------------------------------------------------------
 	llm := axontest.NewMockLLM().
 		// Turn 1 — search
 		OnRound(0).RespondWithToolCall("search_restaurants", map[string]any{
@@ -80,59 +61,45 @@ func main() {
 			"Your confirmation code is RES-BEL-0211. Enjoy your dinner!",
 	)
 
-	// -------------------------------------------------------------------------
-	// Build the agent from a default config (in-memory history, blocklist guard).
-	// -------------------------------------------------------------------------
 	cfg := NewDefaultConfig(llm, logger)
-	agent := NewRestaurantAgent(cfg, "demo-session-001")
+	agent := NewRestaurantAgent(cfg)
+
+	// One Session value owns history load, persistence, and metrics for the
+	// whole conversation. The agent itself is stateless across turns.
+	sess := &session.Session{
+		ID:      "demo-session-001",
+		UserID:  "demo-user",
+		History: cfg.HistoryStore,
+		Metrics: session.NewSessionMetrics(),
+	}
 
 	ctx := context.Background()
 
-	// -------------------------------------------------------------------------
-	// Turn 1: Search for Italian restaurants.
-	// -------------------------------------------------------------------------
-	fmt.Println("=== Turn 1: Find Italian restaurants ===")
-	query1 := "Find me Italian restaurants downtown"
-	fmt.Println("User:", query1)
-
-	result1, err := agent.Run(ctx, query1)
-	if err != nil {
-		log.Fatalf("Turn 1 failed: %v", err)
+	queries := []string{
+		"Find me Italian restaurants downtown",
+		"Can I see the menu for Bella Trattoria?",
+		"Book a table for 2 at Bella Trattoria tonight at 7 PM",
 	}
-	fmt.Println("Assistant:", result1.Text)
-	fmt.Println()
-
-	// -------------------------------------------------------------------------
-	// Turn 2: Check the menu at Bella Trattoria.
-	// -------------------------------------------------------------------------
-	fmt.Println("=== Turn 2: Check the menu ===")
-	query2 := "Can I see the menu for Bella Trattoria?"
-	fmt.Println("User:", query2)
-
-	result2, err := agent.Run(ctx, query2)
-	if err != nil {
-		log.Fatalf("Turn 2 failed: %v", err)
+	headers := []string{
+		"=== Turn 1: Find Italian restaurants ===",
+		"=== Turn 2: Check the menu ===",
+		"=== Turn 3: Make a reservation ===",
 	}
-	fmt.Println("Assistant:", result2.Text)
-	fmt.Println()
 
-	// -------------------------------------------------------------------------
-	// Turn 3: Make a reservation.
-	// -------------------------------------------------------------------------
-	fmt.Println("=== Turn 3: Make a reservation ===")
-	query3 := "Book a table for 2 at Bella Trattoria tonight at 7 PM"
-	fmt.Println("User:", query3)
-
-	result3, err := agent.Run(ctx, query3)
-	if err != nil {
-		log.Fatalf("Turn 3 failed: %v", err)
+	for i, q := range queries {
+		fmt.Println(headers[i])
+		fmt.Println("User:", q)
+		result, err := sess.Run(ctx, agent, q)
+		if err != nil {
+			log.Fatalf("Turn %d failed: %v", i+1, err)
+		}
+		fmt.Println("Assistant:", result.Text)
+		fmt.Println()
 	}
-	fmt.Println("Assistant:", result3.Text)
-	fmt.Println()
 
-	// -------------------------------------------------------------------------
-	// Print accumulated cost summary.
-	// -------------------------------------------------------------------------
 	fmt.Println("=== Session Summary ===")
 	fmt.Println(FormatCostSummary(cfg.CostTracker))
+	snap := sess.Metrics.Snapshot()
+	fmt.Printf("Session metrics — runs: %d, input tokens: %d, output tokens: %d, total latency: %v\n",
+		snap.RunCount, snap.InputTokens, snap.OutputTokens, snap.TotalLatency)
 }

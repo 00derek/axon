@@ -41,17 +41,27 @@ db.conversation_history.createIndex({ session_id: 1 }, { unique: true })
 import (
     "go.mongodb.org/mongo-driver/v2/mongo"
     contribmongo "github.com/axonframework/axon/contrib/mongo"
-    "github.com/axonframework/axon/interfaces"
 )
 
 memoryStore := contribmongo.NewMemoryStore(db, "user_memories", embedder)
 ```
 
-`NewMemoryStore(db *mongo.Database, collection string, embedder interfaces.Embedder) interfaces.MemoryStore`
+`NewMemoryStore(db *mongo.Database, collection string, embedder mongo.Embedder) interfaces.MemoryStore`
 
-Each memory is embedded via the provided `Embedder` and upserted using
-`BulkWrite` keyed on `(user_id, memory_id)`. Memories with an empty `ID` get
-an auto-generated identifier in the form `mem-<counter>`.
+The `mongo.Embedder` interface is defined locally by this package — RAG
+machinery is intentionally not part of the core axon surface area:
+
+```go
+type Embedder interface {
+    Embed(ctx context.Context, texts []string) ([][]float32, error)
+}
+```
+
+Plug in any embedding client that satisfies this shape (OpenAI, Cohere,
+Voyage, a local model, etc.). Each memory is embedded via the provided
+`Embedder` and upserted using `BulkWrite` keyed on `(user_id, memory_id)`.
+Memories with an empty `ID` get an auto-generated identifier in the form
+`mem-<counter>`.
 
 `Search` uses a MongoDB Atlas `$vectorSearch` aggregation pipeline to find the
 `topK` most similar memories for a user. The collection must have:

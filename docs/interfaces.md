@@ -1,11 +1,17 @@
 # Interfaces
 
-Axon defines four contracts that separate persistence and safety concerns from
-agent logic: `HistoryStore`, `MemoryStore`, `Guard`, and `Embedder`. Each
-interface lives in `github.com/axonframework/axon/interfaces`. Thread-safe
-in-memory reference implementations are provided in the
+Axon defines three contracts that separate persistence and safety concerns from
+agent logic: `HistoryStore`, `MemoryStore`, and `Guard`. Each interface lives in
+`github.com/axonframework/axon/interfaces`. Thread-safe in-memory reference
+implementations are provided in the
 `github.com/axonframework/axon/interfaces/inmemory` package for development and
 testing. Bring your own implementations for production.
+
+Retrieval-augmented generation (RAG) — embedders, chunkers, vector stores,
+retrievers, rerankers — is intentionally out of scope. Agents consume retrieval
+the same way they consume any other capability: as a typed tool. See
+[`tools.md`](./tools.md#wrapping-a-retriever-as-a-tool) for the recommended
+pattern.
 
 ---
 
@@ -157,7 +163,7 @@ type Memory struct {
 - `Get` returns all memories for a user.
 - `Search` returns up to `topK` memories matching `query` for a user. The
   matching strategy is implementation-defined (substring for the in-memory
-  store, vector similarity for embedder-backed stores).
+  store, vector similarity for vector-backed stores).
 - `Delete` removes memories by ID. Unknown IDs are silently ignored.
 
 ### In-memory implementation
@@ -276,26 +282,7 @@ combined guard-then-history pattern in a single `OnStart` hook.
 
 ---
 
-## 4. Embedder
-
-`Embedder` generates vector embeddings for text. The interface is
-batch-oriented: it accepts a slice of strings and returns one embedding vector
-per input text.
-
-```go
-type Embedder interface {
-    Embed(ctx context.Context, texts []string) ([][]float32, error)
-}
-```
-
-`Embedder` is used by vector-search `MemoryStore` implementations that need to
-convert query strings and memory content into vectors for similarity search.
-The in-memory `MemoryStore` does not use an `Embedder`; you would provide one
-when implementing a store backed by a vector database.
-
----
-
-## 5. Implementing Your Own
+## 4. Implementing Your Own
 
 For production workloads you will typically replace the in-memory
 implementations with stores backed by a real database. The interface is small
@@ -361,6 +348,6 @@ func (s *historyStore) Clear(ctx context.Context, sessionID string) error {
 }
 ```
 
-The same pattern applies to `MemoryStore`, `Guard`, and `Embedder`: implement
-the interface, inject the dependency via your agent configuration struct, and
-the agent code remains unchanged.
+The same pattern applies to `MemoryStore` and `Guard`: implement the interface,
+inject the dependency via your agent configuration struct, and the agent code
+remains unchanged.

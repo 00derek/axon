@@ -62,6 +62,65 @@ agent := kernel.NewAgent(
 )
 ```
 
+### Wrapping a retriever as a tool
+
+Axon does not ship a built-in `Embedder` or retriever interface. Retrieval-
+augmented generation (RAG) — embedders, chunkers, vector stores, retrievers,
+rerankers, hybrid search, eval — is its own ecosystem and out of scope for an
+agent framework. Agents should consume retrieval the same way they consume any
+other capability: through a typed tool.
+
+Define whatever `Retriever` shape suits your application, then wrap it with
+`kernel.NewTool`:
+
+```go
+package main
+
+import (
+    "context"
+
+    "github.com/axonframework/axon/kernel"
+)
+
+// Doc is whatever your retriever returns. Keep the shape narrow — only the
+// fields the model actually needs.
+type Doc struct {
+    Title   string `json:"title"`
+    URL     string `json:"url"`
+    Snippet string `json:"snippet"`
+}
+
+// Retriever is defined by the caller, not by axon. Plug in any backend:
+// vector DB, BM25 index, hybrid search service, hosted RAG API.
+type Retriever interface {
+    Search(ctx context.Context, query string, topK int) ([]Doc, error)
+}
+
+type SearchDocsParams struct {
+    Query string `json:"query" description:"The search query"`
+    TopK  int    `json:"top_k" description:"Maximum number of results" required:"false" minimum:"1" maximum:"20"`
+}
+
+// NewSearchDocsTool wraps any Retriever as a kernel.Tool the agent can call.
+func NewSearchDocsTool(r Retriever) kernel.Tool {
+    return kernel.NewTool[SearchDocsParams, []Doc](
+        "search_docs",
+        "Search the knowledge base and return matching documents.",
+        func(ctx context.Context, p SearchDocsParams) ([]Doc, error) {
+            topK := p.TopK
+            if topK == 0 {
+                topK = 5
+            }
+            return r.Search(ctx, p.Query, topK)
+        },
+    )
+}
+```
+
+The agent never sees the retriever directly — it only sees the tool. That keeps
+the framework agnostic about how documents are indexed, embedded, ranked, or
+served, and lets you evolve your RAG stack independently of the agent loop.
+
 ---
 
 ## 2. Schema Generation

@@ -30,11 +30,22 @@ type memoryDoc struct {
 	UpdatedAt time.Time `bson:"updated_at"`
 }
 
+// Embedder generates vector embeddings for text. It is batch-oriented:
+// implementations accept multiple texts and must return one embedding per input
+// text in the same order.
+//
+// This interface is defined locally because RAG (embedders, chunkers, vector
+// stores, retrievers) is out of scope for the core axon framework. Users plug
+// in their own embedder when constructing a vector-backed MemoryStore.
+type Embedder interface {
+	Embed(ctx context.Context, texts []string) ([][]float32, error)
+}
+
 // memoryStore is a MongoDB-backed implementation of interfaces.MemoryStore.
 // Uses Atlas Vector Search for semantic retrieval via $vectorSearch aggregation.
 type memoryStore struct {
 	coll     *gomongo.Collection
-	embedder interfaces.Embedder
+	embedder Embedder
 }
 
 // NewMemoryStore creates a MongoDB-backed MemoryStore with vector search.
@@ -43,7 +54,7 @@ type memoryStore struct {
 //   - An Atlas Vector Search index on the embedding field
 //
 // The embedder is called to generate vector embeddings for Save and Search operations.
-func NewMemoryStore(db *gomongo.Database, collection string, embedder interfaces.Embedder) interfaces.MemoryStore {
+func NewMemoryStore(db *gomongo.Database, collection string, embedder Embedder) interfaces.MemoryStore {
 	return &memoryStore{
 		coll:     db.Collection(collection),
 		embedder: embedder,
